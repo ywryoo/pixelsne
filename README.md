@@ -1,10 +1,12 @@
 # Installation #
 
-On Linux or OS X, compile the source using the following command:
+On Linux, compile the source using the following command:
 
 ```
-sudo g++ ptree.cpp pixelsne.cpp LargeVis.cpp -o pixelsne -O2 -I /usr/include/boost -lboost_thread -lboost_system -lm -pthread -lgsl -lgslcblas -Ofast -march=native -ffast-math
+g++ ptree.cpp pixelsne.cpp LargeVis.cpp -o pixelsne -O2 -I /usr/include/boost -lboost_thread -lboost_system -lm -pthread -lgsl -lgslcblas -Ofast -march=native -ffast-math
 ```
+
+You need to install gsl and boost.
 
 The executable will be called `pixelsne`.
 
