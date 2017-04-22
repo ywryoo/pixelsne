@@ -830,7 +830,7 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
     fclose(h);
 	printf("Wrote the %i x %i data matrix successfully!\n", n, d);
 }
-
+/*
 
 // Function that runs the Barnes-Hut implementation of t-SNE
 int main() {
@@ -856,7 +856,7 @@ int main() {
     //     printf("pixelsne.cpp not USE_BITWISE_OP\n");
     // #endif
 
-	/*Op*/
+    //Op
 	pexp = (double*)calloc(EXP_LUT_DIV, sizeof(double));
 	for (int i = 0; i < EXP_LUT_DIV; i++)
 	{
@@ -892,4 +892,4 @@ int main() {
 		free(landmarks); landmarks = NULL;
     }
     delete(pixelsne);
-}
+}*/
