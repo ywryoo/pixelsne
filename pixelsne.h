@@ -18,7 +18,10 @@ public:
     bool load_data(double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed);
     void save_data(double* data, int* landmarks, double* costs, int n, int d);
     void symmetrizeMatrix(unsigned long long** row_P, unsigned long long** col_P, double** val_P, int N); // should be static!
-
+    int updatePoints(bool &exact, double *P, double* Y, int &N, int &no_dims, double* dY, unsigned long long* row_P,
+            unsigned long long* col_P, double* val_P, double &theta, double &beta, unsigned int &bins, int &iter, double* gains,
+            double* uY, double &momentum, double &eta, int &stop_lying_iter, int &mom_switch_iter, double &final_momentum,
+            float &total_time, int &max_iter, clock_t &start, clock_t &end);
 private:
     void computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, double beta, unsigned int bins, int iter_cnt);
     void computeExactGradient(double* P, double* Y, int N, int D, double* dC);

@@ -179,40 +179,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     tree = NULL;
 	
 	for(int iter = 0; iter < max_iter; iter++) {
-        if(exact) computeExactGradient(P, Y, N, no_dims, dY);
-        else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
-
-        // Update gains
-        for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-        for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
-
-        // Perform gradient update (with momentum and gains)
-        for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-		for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
-
-        beta = minmax(Y, N, no_dims, beta, bins, iter);
-
-        // Stop lying about the P-values after a while, and switch momentum
-        if(iter == stop_lying_iter) {
-            if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
-            else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
-        }
-        if(iter == mom_switch_iter) momentum = final_momentum;
-
-        // Print out progress
-        if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
-            end = clock();
-            double C = .0;
-            if(exact) C = evaluateError(P, Y, N, no_dims);
-            else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
-            if(iter == 0)
-                printf("Iteration %d: error is %f\n", iter + 1, C);
-            else {
-                total_time += (float) (end - start) / CLOCKS_PER_SEC;
-                printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
-            }
-			start = clock();
-        }
+        updatePoints(exact, P, Y, N, no_dims, dY, row_P, col_P, val_P, theta, beta, bins, iter, gains, uY, momentum, eta, stop_lying_iter, mom_switch_iter, final_momentum, total_time,max_iter, start, end);
     }
 
     end = clock(); 
@@ -229,6 +196,47 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         free(val_P); val_P = NULL;
     }
     printf("Fitting performed in %4.2f seconds.\n", total_time);
+}
+
+int PixelSNE::updatePoints(bool &exact, double *P, double* Y, int &N, int &no_dims, double* dY, unsigned long long* row_P,
+            unsigned long long* col_P, double* val_P, double &theta, double &beta, unsigned int &bins, int &iter, double* gains,
+            double* uY, double &momentum, double &eta, int &stop_lying_iter, int &mom_switch_iter, double &final_momentum,
+            float &total_time, int &max_iter, clock_t &start, clock_t &end) {
+    if(exact) computeExactGradient(P, Y, N, no_dims, dY);
+    else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
+
+    // Update gains
+    for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+    for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
+
+    // Perform gradient update (with momentum and gains)
+    for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+    for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
+
+    beta = minmax(Y, N, no_dims, beta, bins, iter);
+
+    // Stop lying about the P-values after a while, and switch momentum
+    if(iter == stop_lying_iter) {
+        if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
+        else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
+    }
+    if(iter == mom_switch_iter) momentum = final_momentum;
+
+    // Print out progress
+    if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+        end = clock();
+        double C = .0;
+        if(exact) C = evaluateError(P, Y, N, no_dims);
+        else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
+        if(iter == 0)
+            printf("Iteration %d: error is %f\n", iter + 1, C);
+        else {
+            total_time += (float) (end - start) / CLOCKS_PER_SEC;
+            printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
+        }
+        start = clock();
+    }
+    return iter++;
 }
 
 void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
@@ -830,8 +838,8 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
     fclose(h);
 	printf("Wrote the %i x %i data matrix successfully!\n", n, d);
 }
-/*
 
+/*
 // Function that runs the Barnes-Hut implementation of t-SNE
 int main() {
 
@@ -839,11 +847,11 @@ int main() {
     int     origN;                  
     int     N;                      
     int     D;                      
-    int     no_dims;                
+    int     no_dims = 2;                
     int*    landmarks;              
 	double  perc_landmarks;         
-    double  perplexity;          
-    double  theta;                
+    double  perplexity = 30;
+    double  theta = 0.5;                
     double* data;                   
     unsigned int bins;
     int     p_method;
@@ -856,7 +864,7 @@ int main() {
     //     printf("pixelsne.cpp not USE_BITWISE_OP\n");
     // #endif
 
-    //Op
+	//Op
 	pexp = (double*)calloc(EXP_LUT_DIV, sizeof(double));
 	for (int i = 0; i < EXP_LUT_DIV; i++)
 	{
@@ -892,4 +900,5 @@ int main() {
 		free(landmarks); landmarks = NULL;
     }
     delete(pixelsne);
-}*/
+}
+*/
