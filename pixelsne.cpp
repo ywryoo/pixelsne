@@ -57,18 +57,19 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     // Determine whether we are using an exact algorithm
     if(N - 1 < 3 * perplexity) { printf("Perplexity too large for the number of data points!\n"); exit(1); }
     printf("Using no_dims = %d, perplexity = %f, bins = %d, p_method = %d and theta = %f\n", no_dims, perplexity, bins, p_method, theta);
-    bool exact = (theta == .0) ? true : false;
+    exact = (theta == .0) ? true : false;
 
     // Set learning parameters
-    float total_time = .0;
-    clock_t start, end;
-	double momentum = .5, final_momentum = .8;
-	double eta = 200.0;
+    total_time = .0;
+    
+	momentum = .5;
+    final_momentum = .8;
+	eta = 200.0;
 
     // Allocate some memory
-    double* dY    = (double*) malloc(N * no_dims * sizeof(double));
-    double* uY    = (double*) malloc(N * no_dims * sizeof(double));
-    double* gains = (double*) malloc(N * no_dims * sizeof(double));
+    dY    = (double*) malloc(N * no_dims * sizeof(double));
+    uY    = (double*) malloc(N * no_dims * sizeof(double));
+    gains = (double*) malloc(N * no_dims * sizeof(double));
     if(dY == NULL || uY == NULL || gains == NULL) { printf("Memory allocation failed!\n"); exit(1); }
     for(int i = 0; i < N * no_dims; i++)    uY[i] =  .0;
     for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
@@ -77,10 +78,10 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     printf("Computing input similarities...\n");
     start = clock();
 
-    double* P = NULL;                      
-    unsigned long long* row_P = NULL;        
-    unsigned long long* col_P = NULL;
-    double* val_P = NULL;
+    P = NULL;                      
+    row_P = NULL;        
+    col_P = NULL;
+    val_P = NULL;
 
 
     if(exact) { 
@@ -98,7 +99,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         if (p_method != 1) {
             printf("P Method: Construct_KNN\n");
 
-            long long if_embed = 1, out_dim = -1, n_samples = -1, n_threads = 1, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
+            long long if_embed = 1, out_dim = -1, n_samples = -1, n_threads = 4, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
             real alpha = -1, n_gamma = -1;
 
             LargeVis p_model;
@@ -174,12 +175,12 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     if(exact) printf("Input similarities computed in %4.2f seconds!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
     else printf("Input similarities computed in %4.2f seconds (sparsity = %f)!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
 
-    double beta = bins * bins * 1e3;
+    beta = bins * bins * 1e3;
     start = clock();
     tree = NULL;
-	
+	/*
 	for(int iter = 0; iter < max_iter; iter++) {
-        updatePoints(exact, P, Y, N, no_dims, dY, row_P, col_P, val_P, theta, beta, bins, iter, gains, uY, momentum, eta, stop_lying_iter, mom_switch_iter, final_momentum, total_time,max_iter, start, end);
+        updatePoints(Y, N, no_dims, theta, bins, iter, stop_lying_iter, mom_switch_iter, max_iter);
     }
 
     end = clock(); 
@@ -195,13 +196,10 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         free(col_P); col_P = NULL;
         free(val_P); val_P = NULL;
     }
-    printf("Fitting performed in %4.2f seconds.\n", total_time);
+    printf("Fitting performed in %4.2f seconds.\n", total_time);*/
 }
 
-int PixelSNE::updatePoints(bool &exact, double *P, double* Y, int &N, int &no_dims, double* dY, unsigned long long* row_P,
-            unsigned long long* col_P, double* val_P, double &theta, double &beta, unsigned int &bins, int &iter, double* gains,
-            double* uY, double &momentum, double &eta, int &stop_lying_iter, int &mom_switch_iter, double &final_momentum,
-            float &total_time, int &max_iter, clock_t &start, clock_t &end) {
+int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     if(exact) computeExactGradient(P, Y, N, no_dims, dY);
     else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
 
@@ -235,8 +233,24 @@ int PixelSNE::updatePoints(bool &exact, double *P, double* Y, int &N, int &no_di
             printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
         }
         start = clock();
+    } else if (iter == max_iter -1) {
+        end = clock(); 
+        total_time += (float) (end - start) / CLOCKS_PER_SEC;
+
+        // Clean up memory
+        free(dY);
+        free(uY);
+        free(gains);
+        if(exact) free(P);
+        else {
+            free(row_P); row_P = NULL;
+            free(col_P); col_P = NULL;
+            free(val_P); val_P = NULL;
+        }
+        printf("Fitting performed in %4.2f seconds.\n", total_time);
+
     }
-    return iter++;
+    return iter+1;
 }
 
 void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
