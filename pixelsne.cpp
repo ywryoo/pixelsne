@@ -32,7 +32,7 @@ double fexp(double num)
 }
 
 PixelSNE::PixelSNE() {
-
+    KNNupdated = false;
 }
 
 PixelSNE::~PixelSNE() {
@@ -42,7 +42,7 @@ PixelSNE::~PixelSNE() {
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
                unsigned int bins, int p_method, int rand_seed, bool skip_random_init, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) { 
-
+                tempN = N;
     // Set random seed
     if (skip_random_init != true) {
       if(rand_seed >= 0) {
@@ -102,10 +102,10 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
             long long if_embed = 1, out_dim = -1, n_samples = -1, n_threads = 4, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
             real alpha = -1, n_gamma = -1;
 
-            LargeVis p_model;
-            p_model.load_from_data(X, N, D);
-            p_model.run(out_dim, n_threads, n_samples, n_propagation, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
-            p_model.get_result(&row_P, &col_P, &val_P);
+            p_model = new LargeVis();
+            p_model->load_from_data(X, N, D);
+            p_model->run(out_dim, n_threads, n_samples, n_propagation, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
+            p_model->get_result(&row_P, &col_P, &val_P);
 
             int need_log = 0;
             if (need_log){
@@ -200,6 +200,17 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 }
 
 int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+    if(KNNupdated)
+    {
+        free(row_P);
+        free(col_P);
+        free(val_P);
+        row_P = new_row_P;
+        col_P = new_col_P;
+        val_P = new_val_P;
+
+        KNNupdated = false;
+    }
     if(exact) computeExactGradient(P, Y, N, no_dims, dY);
     else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
 
@@ -233,7 +244,8 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
             printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
         }
         start = clock();
-    } else if (iter == max_iter -1) {
+    }
+    if (iter == max_iter -1) {
         end = clock(); 
         total_time += (float) (end - start) / CLOCKS_PER_SEC;
 
@@ -851,6 +863,24 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
     fwrite(costs, sizeof(double), n, h);
     fclose(h);
 	printf("Wrote the %i x %i data matrix successfully!\n", n, d);
+}
+
+void PixelSNE::updateKNN(int i)
+{
+    p_model->run_propagation_once(i);
+    
+	p_model->get_result(&new_row_P, &new_col_P, &new_val_P);
+	double sum_P = .0;
+	for(int i = 0; i < new_row_P[tempN]; i++) {
+		sum_P += new_val_P[i];
+	}
+	for(int i = 0; i < new_row_P[tempN]; i++) {
+		new_val_P[i] /= sum_P;
+	}
+	if(exact) { for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
+	else {      for(int i = 0; i < new_row_P[tempN]; i++) new_val_P[i] *= 12.0; }
+
+    KNNupdated = true;
 }
 
 /*

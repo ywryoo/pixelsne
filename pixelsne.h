@@ -2,6 +2,7 @@
 #define PIXELSNE_H
 
 #include "ptree.h"
+#include "LargeVis.h"
 
 static inline double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.0)); }
 
@@ -18,11 +19,17 @@ private:
     double* uY;
     double* gains;
     double* P;
+    int tempN;
     unsigned long long* row_P;        
     unsigned long long* col_P;
     double* val_P;
+    unsigned long long* new_row_P;        
+    unsigned long long* new_col_P;
+    double* new_val_P;
+    
     double beta;
-
+    LargeVis* p_model;
+    bool KNNupdated;
 public:
     PixelSNE();
     ~PixelSNE();
@@ -33,6 +40,7 @@ public:
     void save_data(double* data, int* landmarks, double* costs, int n, int d);
     void symmetrizeMatrix(unsigned long long** row_P, unsigned long long** col_P, double** val_P, int N); // should be static!
     int updatePoints(double* Y, int &N, int &no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter);
+    void updateKNN(int i);
 private:
     void computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, double beta, unsigned int bins, int iter_cnt);
     void computeExactGradient(double* P, double* Y, int N, int D, double* dC);

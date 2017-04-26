@@ -23,6 +23,7 @@ struct arg_struct{
 
 class LargeVis{
 private:
+	void* self;
 	long long n_vertices, n_dim, out_dim, n_samples, n_threads, n_negatives, n_neighbors, n_trees, n_propagations, edge_count_actual;
 	real initial_alpha, gamma, perplexity;
 	real *vec, *vis;
@@ -76,6 +77,7 @@ public:
 	long long get_n_vertices();
 	long long get_out_dim();
 	void get_result(unsigned long long** row_P, unsigned long long** col_P, double** val_P);
+	void run_propagation_once(int i);
 };
 
 #endif

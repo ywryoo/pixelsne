@@ -489,8 +489,8 @@ void LargeVis::compute_similarity()
 		}
 	}
 	
-    delete[] vec; vec = NULL;
-    delete[] knn_vec; knn_vec = NULL;
+    //delete[] vec; vec = NULL;
+    //delete[] knn_vec; knn_vec = NULL;
 	pthread_t *pt = new pthread_t[n_threads];
 	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::compute_similarity_thread_caller, new arg_struct(this, j));
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
@@ -557,7 +557,7 @@ void LargeVis::construt_knn()
 
 	normalize();
 	run_annoy();
-	run_propagation();
+	//run_propagation();
 	test_accuracy();
 	compute_similarity();
 	
@@ -780,4 +780,20 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	printf("%lld\n", n_threads);
 	if (vec) { clean_graph(); construt_knn(); }
 	//visualize();
+}
+
+void LargeVis::run_propagation_once(int i)
+{
+	printf("Running propagation %d\n", i + 1);
+	fflush(stdout);
+	old_knn_vec = knn_vec;
+	knn_vec = new std::vector<int>[n_vertices];
+	pthread_t *pt = new pthread_t[n_threads];
+	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::propagation_thread_caller, new arg_struct(this, j));
+	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
+	delete[] pt;
+	//delete[] old_knn_vec;
+	old_knn_vec = NULL;
+	test_accuracy();
+	compute_similarity();
 }
