@@ -814,7 +814,8 @@ double PixelSNE::randn() {
 	y *= radius;
 	return x;
 }
-void PixelSNE::load_data(const char* input, double **data, int* nnn, int* dddd)
+/*
+void PixelSNE::load_data(, double **data, int* nnn, int* dddd)
 {
     int res = -1;
 	FILE *fin = fopen(input, "rb");
@@ -823,35 +824,37 @@ void PixelSNE::load_data(const char* input, double **data, int* nnn, int* dddd)
 		printf("File not found!\n");
 		return;
 	}
-    printf("Reading input file %s ......", input); fflush(stdout);
+    printf("Reading input file %s ......\n", input); fflush(stdout);
 	int asdf, asdfasdf;
     res = fscanf(fin, "%d%d", &asdf, &asdfasdf);
+    printf("%d %d\n", asdf, asdfasdf);
+//    dddd = new int(asdfasdf);    
+//	res = fscanf(fin, "%d%d", nnn, dddd);
+	float* tempdata = (float*) malloc((asdf) * (asdfasdf) * sizeof(float));
+	for (int i = 0; i < asdf; ++i)
+	{
+		for (int j = 0; j < asdfasdf; ++j)
+		{
+			res = fscanf(fin, "%lf", tempdata[i * (asdfasdf) + j]);
+		}
+	}
+    //*data = tempdata;
+	fclose(fin);
+	printf(" Done.\n");
+	printf("Total vertices : %d\tDimension : %d\n", asdf, asdfasdf);
     *nnn = asdf;
     
     *dddd = asdfasdf;
-//    dddd = new int(asdfasdf);    
-//	res = fscanf(fin, "%d%d", nnn, dddd);
-	*data = (double*) malloc((*nnn) * (*dddd) * sizeof(double));
-	for (long long i = 0; i < *nnn; ++i)
-	{
-		for (long long j = 0; j < *dddd; ++j)
-		{
-			res = fscanf(fin, "%lf", data[i * (*dddd) + j]);
-		}
-	}
-	fclose(fin);
-	printf(" Done.\n");
-	printf("Total vertices : %d\tDimension : %d\n", *nnn, *dddd);
 }
-
+*/
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
-bool PixelSNE::load_data(double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed) {
+bool PixelSNE::load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed) {
 
     // Open file, read first 2 integers, allocate memory, and read the data
     FILE *h;
     size_t res = -1;
-    if((h = fopen("data.dat", "r+b")) == NULL) {
+    if((h = fopen(inputfile, "r+b")) == NULL) {
         printf("Error: could not open data file.\n");
         return false;
     }
