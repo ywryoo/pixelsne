@@ -814,6 +814,35 @@ double PixelSNE::randn() {
 	y *= radius;
 	return x;
 }
+void PixelSNE::load_data(const char* input, double **data, int* nnn, int* dddd)
+{
+    int res = -1;
+	FILE *fin = fopen(input, "rb");
+	if (fin == NULL)
+	{
+		printf("File not found!\n");
+		return;
+	}
+    printf("Reading input file %s ......", input); fflush(stdout);
+	int asdf, asdfasdf;
+    res = fscanf(fin, "%d%d", &asdf, &asdfasdf);
+    *nnn = asdf;
+    
+    *dddd = asdfasdf;
+//    dddd = new int(asdfasdf);    
+//	res = fscanf(fin, "%d%d", nnn, dddd);
+	*data = (double*) malloc((*nnn) * (*dddd) * sizeof(double));
+	for (long long i = 0; i < *nnn; ++i)
+	{
+		for (long long j = 0; j < *dddd; ++j)
+		{
+			res = fscanf(fin, "%lf", data[i * (*dddd) + j]);
+		}
+	}
+	fclose(fin);
+	printf(" Done.\n");
+	printf("Total vertices : %d\tDimension : %d\n", *nnn, *dddd);
+}
 
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
