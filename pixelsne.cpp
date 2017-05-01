@@ -208,7 +208,10 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         row_P = new_row_P;
         col_P = new_col_P;
         val_P = new_val_P;
-
+        if(iter >= stop_lying_iter) {
+            if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
+            else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
+        }
         KNNupdated = false;
     }
     if(exact) computeExactGradient(P, Y, N, no_dims, dY);
@@ -216,6 +219,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
 
     // Update gains
     for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+
     for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
 
     // Perform gradient update (with momentum and gains)
