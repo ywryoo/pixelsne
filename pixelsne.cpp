@@ -99,12 +99,13 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         if (p_method != 1) {
             printf("P Method: Construct_KNN\n");
 
-            long long if_embed = 1, out_dim = -1, n_samples = -1, n_threads = 4, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
+            long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
+            long long threadNum = n_threads;
             real alpha = -1, n_gamma = -1;
 
             p_model = new LargeVis();
             p_model->load_from_data(X, N, D);
-            p_model->run(out_dim, n_threads, n_samples, n_propagation, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
+            p_model->run(out_dim, threadNum, n_samples, n_propagation, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
             p_model->get_result(&row_P, &col_P, &val_P);
 
             int need_log = 0;
