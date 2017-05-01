@@ -21,6 +21,8 @@ private:
     double* uY;
     double* gains;
     double* P;
+    double* pos_f = NULL;
+    double* neg_f = NULL;
     int tempN;
     unsigned long long* row_P;        
     unsigned long long* col_P;

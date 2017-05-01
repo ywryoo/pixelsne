@@ -209,9 +209,9 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         row_P = new_row_P;
         col_P = new_col_P;
         val_P = new_val_P;
-        if(iter >= stop_lying_iter) {
-            if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
-            else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
+        if(iter < stop_lying_iter) {
+            if(exact) { for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
+            else {      for(int i = 0; i < new_row_P[tempN]; i++) new_val_P[i] *= 12.0; }
         }
         KNNupdated = false;
     }
@@ -255,10 +255,13 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         total_time += (float) (end - start) / CLOCKS_PER_SEC;
 
         // Clean up memory
-        free(dY);
-        free(uY);
-        free(gains);
-        if(exact) free(P);
+        free(dY); dY = NULL;
+        free(uY); uY = NULL;
+        free(gains); gains = NULL;
+        free(pos_f); pos_f = NULL;
+        free(neg_f); neg_f = NULL;
+
+        if(exact) {free(P); P = NULL;}
         else {
             free(row_P); row_P = NULL;
             free(col_P); col_P = NULL;
@@ -290,9 +293,18 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
     // Compute all terms required for t-SNE gradient
     start = clock();
     double sum_Q = .0;
-    double* pos_f = (double*) calloc(N * D, sizeof(double));
-    double* neg_f = (double*) calloc(N * D, sizeof(double));
-    if(pos_f == NULL || neg_f == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+
+    if(pos_f == NULL && neg_f == NULL)
+    {
+        pos_f = (double*) calloc(N * D, sizeof(double));
+        neg_f = (double*) calloc(N * D, sizeof(double));
+        if(pos_f == NULL || neg_f == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    }
+    else
+    {
+        for(int i = 0; i < N*D; i++) neg_f[i]=0;
+        for(int i = 0; i < N*D; i++) pos_f[i]=0;
+    }
     tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, beta);
     for(int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
 
@@ -300,8 +312,7 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
     for(int i = 0; i < N * D; i++) {
         dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
     }
-    free(pos_f);
-    free(neg_f);
+
     end = clock();
 }
 
@@ -909,8 +920,6 @@ void PixelSNE::updateKNN(int i)
 	for(int i = 0; i < new_row_P[tempN]; i++) {
 		new_val_P[i] /= sum_P;
 	}
-	if(exact) { for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
-	else {      for(int i = 0; i < new_row_P[tempN]; i++) new_val_P[i] *= 12.0; }
 
     KNNupdated = true;
 }
