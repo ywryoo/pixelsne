@@ -40,7 +40,7 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, bool skip_random_init, int max_iter, int stop_lying_iter, 
+               unsigned int bins, int p_method, int rand_seed, int n_threads, bool skip_random_init, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) { 
                 tempN = N;
     // Set random seed
@@ -818,39 +818,34 @@ double PixelSNE::randn() {
 	y *= radius;
 	return x;
 }
-/*
-void PixelSNE::load_data(, double **data, int* nnn, int* dddd)
+
+void PixelSNE::load_data(const char* inputfile, double **data, int* n, int* d)
 {
     int res = -1;
-	FILE *fin = fopen(input, "rb");
+	FILE *fin = fopen(inputfile, "rb");
 	if (fin == NULL)
 	{
 		printf("File not found!\n");
 		return;
 	}
-    printf("Reading input file %s ......\n", input); fflush(stdout);
-	int asdf, asdfasdf;
-    res = fscanf(fin, "%d%d", &asdf, &asdfasdf);
-    printf("%d %d\n", asdf, asdfasdf);
+    printf("Reading input file %s ......\n", inputfile);
+    res = fscanf(fin, "%d%d", n, d);
 //    dddd = new int(asdfasdf);    
 //	res = fscanf(fin, "%d%d", nnn, dddd);
-	float* tempdata = (float*) malloc((asdf) * (asdfasdf) * sizeof(float));
-	for (int i = 0; i < asdf; ++i)
+    double *tmpData = new double[*n * *d];
+	for (int i = 0; i < *n; ++i)
 	{
-		for (int j = 0; j < asdfasdf; ++j)
+		for (int j = 0; j < *d; ++j)
 		{
-			res = fscanf(fin, "%lf", tempdata[i * (asdfasdf) + j]);
+			res = fscanf(fin, "%lf", &tmpData[i * *d + j]);
 		}
 	}
-    //*data = tempdata;
+    *data = tmpData;
 	fclose(fin);
 	printf(" Done.\n");
-	printf("Total vertices : %d\tDimension : %d\n", asdf, asdfasdf);
-    *nnn = asdf;
-    
-    *dddd = asdfasdf;
+	printf("Total vertices : %d\tDimension : %d\n", *n, *d);
 }
-*/
+
 // Function that loads data from a t-SNE file
 // Note: this function does a malloc that should be freed elsewhere
 bool PixelSNE::load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed) {

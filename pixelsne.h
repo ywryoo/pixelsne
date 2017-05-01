@@ -36,9 +36,9 @@ public:
     PixelSNE();
     ~PixelSNE();
     void run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-        unsigned int bins, int p_method, int rand_seed, bool skip_random_init, int max_iter=1000, int stop_lying_iter=250, 
+        unsigned int bins, int p_method, int rand_seed, int n_threads, bool skip_random_init, int max_iter=1000, int stop_lying_iter=250, 
         int mom_switch_iter=250);
-  //  void load_data(const char* input, double **data, int* nnn, int* dddd);
+    void load_data(const char* inputfile, double **data, int* n, int* d);
     bool load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed);
     void save_data(double* data, int* landmarks, double* costs, int n, int d);
     void symmetrizeMatrix(unsigned long long** row_P, unsigned long long** col_P, double** val_P, int N); // should be static!

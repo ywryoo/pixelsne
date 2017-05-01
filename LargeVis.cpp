@@ -470,7 +470,7 @@ void *LargeVis::search_reverse_thread_caller(void *arg)
 
 void LargeVis::compute_similarity()
 {
-    printf("Computing similarities ......"); fflush(stdout);
+    printf("Computing similarities ......\n"); fflush(stdout);
 	n_edge = 0;
 	head = new long long[n_vertices];
 	long long i, x, y, p, q;
