@@ -792,7 +792,7 @@ void LargeVis::run_propagation_once(int i)
 	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::propagation_thread_caller, new arg_struct(this, j));
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
-	//delete[] old_knn_vec;
+	delete[] old_knn_vec;
 	old_knn_vec = NULL;
 	test_accuracy();
 	compute_similarity();
