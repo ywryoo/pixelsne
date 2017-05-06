@@ -278,6 +278,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         }
         printf("PixelSNE: Fitting performed in %4.2f clock seconds.\n", total_time);
         double elapsed3  = (double)(end_p3.tv_sec - start_p3.tv_sec) + (double)(end_p3.tv_nsec - start_p3.tv_nsec)/BILLION;
+        printf("PixelSNE: Initialization: %.2lf real seconds\n", total_time2);
         printf("PixelSNE: Fitting performed in %4.2f real seconds!\n", elapsed3);
         total_time2 += elapsed3;
         printf("PixelSNE: Total real time: %.2lfs\n", total_time2);

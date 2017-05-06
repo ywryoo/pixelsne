@@ -60,7 +60,7 @@ void LargeVis::load_from_file(char *infile)
 		printf("LargeVis: \nFile not found!\n");
 		return;
 	}
-    printf("LargeVis: Reading input file %s ......", infile); fflush(stdout);
+    printf("LargeVis: Reading input file %s ......\n", infile);
 	res = fscanf(fin, "%lld%lld", &n_vertices, &n_dim);
 	vec = new real[n_vertices * n_dim];
 	for (long long i = 0; i < n_vertices; ++i)
@@ -135,8 +135,7 @@ void LargeVis::load_from_graph(char *infile)
 		++n_edge;
 		if (n_edge % 5000 == 0)
 		{
-			printf("LargeVis: Reading input file %s ...... %lldK edges%c", infile, n_edge / 1000, 13);
-			fflush(stdout);
+			printf("LargeVis: Reading input file %s ...... %lldK edges%c\n", infile, n_edge / 1000, 13);
 		}
 	}
 	fclose(fin);
@@ -188,7 +187,7 @@ long long LargeVis::get_out_dim()
 
 void LargeVis::normalize()
 {
-    printf("LargeVis: Normalizing ......"); fflush(stdout);
+    printf("LargeVis: Normalizing ......\n");
 	real *mean = new real[n_dim];
 	for (long long i = 0; i < n_dim; ++i) mean[i] = 0;
 	for (long long i = 0, ll = 0; i < n_vertices; ++i, ll += n_dim)
@@ -309,7 +308,7 @@ void *LargeVis::annoy_thread_caller(void *arg)
 
 void LargeVis::run_annoy()
 {
-    printf("LargeVis: Running ANNOY ......"); fflush(stdout);
+    printf("LargeVis: Running ANNOY ......\n");
 	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
 	
 	
@@ -379,8 +378,7 @@ void LargeVis::run_propagation()
 {
 	for (int i = 0; i < n_propagations; ++i)
 	{
-		printf("LargeVis: Running propagation %d/%lld%c", i + 1, n_propagations, 13);
-		fflush(stdout);
+		printf("LargeVis: Running propagation %d/%lld%c\n", i + 1, n_propagations, 13);
 		old_knn_vec = knn_vec;
 		knn_vec = new std::vector<int>[n_vertices];
 		pthread_t *pt = new pthread_t[n_threads];
@@ -477,7 +475,7 @@ void *LargeVis::search_reverse_thread_caller(void *arg)
 
 void LargeVis::compute_similarity()
 {
-    printf("LargeVis: Computing similarities ......\n"); fflush(stdout);
+    printf("LargeVis: Computing similarities ......\n");
 	n_edge = 0;
 	head = new long long[n_vertices];
 	long long i, x, y, p, q;
@@ -641,8 +639,7 @@ void LargeVis::visualize_thread(int id)
 			last_edge_count = edge_count;
 			cur_alpha = initial_alpha * (1 - edge_count_actual / (n_samples + 1.0));
 			if (cur_alpha < initial_alpha * 0.0001) cur_alpha = initial_alpha * 0.0001;
-			printf("LargeVis: %cFitting model\tAlpha: %f Progress: %.3lf%%", 13, cur_alpha, (real)edge_count_actual / (real)(n_samples + 1) * 100);
-			fflush(stdout);
+			printf("LargeVis: %cFitting model\tAlpha: %f Progress: %.3lf%%\n", 13, cur_alpha, (real)edge_count_actual / (real)(n_samples + 1) * 100);
 		}
 		p = sample_an_edge(gsl_rng_uniform(gsl_r), gsl_rng_uniform(gsl_r));
 		x = edge_from[p];
@@ -804,8 +801,9 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 void LargeVis::run_propagation_once(int i)
 {
 	printf("LargeVis: Running propagation %d\n", i + 1);
-	fflush(stdout);
+	struct timespec start_p, end_p;
 
+	clock_gettime(CLOCK_MONOTONIC, &start_p);
 	int cnt = 0;
 
 	old_knn_vec = knn_vec;
@@ -829,6 +827,9 @@ void LargeVis::run_propagation_once(int i)
 	}
 
 	printf("LargeVis: KNN Catch: %d\n", cnt);
+	clock_gettime(CLOCK_MONOTONIC, &end_p);
+	double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
+	printf("LargeVis: propagation %d: %.2f real seconds!\n", i + 1, elapsed);
 
 	delete[] old_knn_vec;
 	old_knn_vec = NULL;
