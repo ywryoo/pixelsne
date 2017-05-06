@@ -427,11 +427,17 @@ void LargeVis::compute_similarity_thread(int id)
 		for (p = head[x], sum_weight = FLT_MIN; p >= 0; p = next[p])
 		{
 			sum_weight += edge_weight[p] = exp(-beta * edge_weight[p]);
+
 		}
+		if(x == 0)
+			printf("%f\n", edge_weight[head[x]]);
+
 		for (p = head[x]; p >= 0; p = next[p])
 		{
 			edge_weight[p] /= sum_weight;
 		}
+		if(x == 0)
+			printf("%f\n%f\n", sum_weight, edge_weight[head[x]]);
 	}
 }
 
@@ -474,7 +480,7 @@ void LargeVis::compute_similarity()
 	n_edge = 0;
 	head = new long long[n_vertices];
 	long long i, x, y, p, q;
-	real sum_weight = 0;
+
 	for (i = 0; i < n_vertices; ++i) head[i] = -1;
 	for (x = 0; x < n_vertices; ++x)
 	{
@@ -516,10 +522,9 @@ void LargeVis::compute_similarity()
 				reverse.push_back(p);
 				q = reverse[p] = head[y] = n_edge++;
 			}
-			if (x > y){
-				sum_weight += edge_weight[p] + edge_weight[q];
+			if (x > y)
 				edge_weight[p] = edge_weight[q] = (edge_weight[p] + edge_weight[q]) / 2;
-			}
+			
 		}
 	}
 
@@ -795,5 +800,6 @@ void LargeVis::run_propagation_once(int i)
 	delete[] old_knn_vec;
 	old_knn_vec = NULL;
 	test_accuracy();
+	clean_graph();
 	compute_similarity();
 }
