@@ -46,17 +46,17 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     // Set random seed
     if (skip_random_init != true) {
       if(rand_seed >= 0) {
-          printf("Using random seed: %d\n", rand_seed);
+          printf("PixelSNE: Using random seed: %d\n", rand_seed);
           srand((unsigned int) rand_seed);
       } else {
-          printf("Using current time as random seed...\n");
+          printf("PixelSNE: Using current time as random seed...\n");
           srand(time(NULL));
       }
     }
 
     // Determine whether we are using an exact algorithm
-    if(N - 1 < 3 * perplexity) { printf("Perplexity too large for the number of data points!\n"); exit(1); }
-    printf("Using no_dims = %d, perplexity = %f, bins = %d, p_method = %d and theta = %f\n", no_dims, perplexity, bins, p_method, theta);
+    if(N - 1 < 3 * perplexity) { printf("PixelSNE: Perplexity too large for the number of data points!\n"); exit(1); }
+    printf("PixelSNE: Using no_dims = %d, perplexity = %f, bins = %d, p_method = %d and theta = %f\n", no_dims, perplexity, bins, p_method, theta);
     exact = (theta == .0) ? true : false;
 
     // Set learning parameters
@@ -70,13 +70,14 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     dY    = (double*) malloc(N * no_dims * sizeof(double));
     uY    = (double*) malloc(N * no_dims * sizeof(double));
     gains = (double*) malloc(N * no_dims * sizeof(double));
-    if(dY == NULL || uY == NULL || gains == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(dY == NULL || uY == NULL || gains == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     for(int i = 0; i < N * no_dims; i++)    uY[i] =  .0;
     for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
     // Normalize input data (to prevent numerical problems)
-    printf("Computing input similarities...\n");
+    printf("PixelSNE: Computing input similarities...\n");
     start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start_p2);
 
     P = NULL;                      
     row_P = NULL;        
@@ -86,7 +87,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
     if(exact) { 
         // Compute similarities
-        printf("Exact?");
+        printf("PixelSNE: Exact?");
     }
 
     else {  
@@ -97,7 +98,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
         // Using LargeVis
         if (p_method != 1) {
-            printf("P Method: Construct_KNN\n");
+            printf("PixelSNE: P Method: Construct_KNN\n");
 
             long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
             long long threadNum = n_threads;
@@ -139,7 +140,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         }
         else 
         {
-            printf("P Method: VP Tree\n");
+            printf("PixelSNE: P Method: VP Tree\n");
 
             // Compute asymmetric pairwise input similarities
             computeGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, (int) (3 * perplexity));
@@ -158,10 +159,12 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
         clock_gettime(CLOCK_MONOTONIC, &end_p);
         double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-        printf("P training time: %.2f seconds!\n", elapsed);
+        printf("PixelSNE: P training real time: %.2lf seconds!\n", elapsed);
     }
     end = clock();
-  
+    clock_gettime(CLOCK_MONOTONIC, &end_p2);
+
+
     // Lie about the P-values
     if(exact) { for(int i = 0; i < N * N; i++)        P[i] *= 12.0; }
     else {      for(int i = 0; i < row_P[N]; i++) val_P[i] *= 12.0; }
@@ -172,12 +175,17 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         }
     }
 
+    double elapsed2  = (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION;
+    printf("PixelSNE: Input similarities computed in %4.2lf real seconds!(P included)\n", elapsed2);
+    total_time2 = elapsed2;
+
 	// Perform main training loop
-    if(exact) printf("Input similarities computed in %4.2f seconds!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
-    else printf("Input similarities computed in %4.2f seconds (sparsity = %f)!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
+    if(exact) printf("PixelSNE: Input similarities computed in %4.2f clock seconds!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
+    else printf("PixelSNE: Input similarities computed in %4.2f clock seconds (sparsity = %f)!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
 
     beta = bins * bins * 1e3;
     start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start_p3);
     tree = NULL;
 	/*
 	for(int iter = 0; iter < max_iter; iter++) {
@@ -197,7 +205,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         free(col_P); col_P = NULL;
         free(val_P); val_P = NULL;
     }
-    printf("Fitting performed in %4.2f seconds.\n", total_time);*/
+    printf("PixelSNE: Fitting performed in %4.2f seconds.\n", total_time);*/
 }
 
 int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
@@ -243,14 +251,15 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         if(exact) C = evaluateError(P, Y, N, no_dims);
         else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
         if(iter == 0)
-            printf("Iteration %d: error is %f\n", iter + 1, C);
+            printf("PixelSNE: Iteration %d: error is %f\n", iter + 1, C);
         else {
             total_time += (float) (end - start) / CLOCKS_PER_SEC;
-            printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
+            printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
         }
         start = clock();
     }
     if (iter == max_iter -1) {
+        clock_gettime(CLOCK_MONOTONIC, &end_p3);
         end = clock(); 
         total_time += (float) (end - start) / CLOCKS_PER_SEC;
 
@@ -267,8 +276,11 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
             free(col_P); col_P = NULL;
             free(val_P); val_P = NULL;
         }
-        printf("Fitting performed in %4.2f seconds.\n", total_time);
-
+        printf("PixelSNE: Fitting performed in %4.2f clock seconds.\n", total_time);
+        double elapsed3  = (double)(end_p3.tv_sec - start_p3.tv_sec) + (double)(end_p3.tv_nsec - start_p3.tv_nsec)/BILLION;
+        printf("PixelSNE: Fitting performed in %4.2f real seconds!\n", elapsed3);
+        total_time2 += elapsed3;
+        printf("PixelSNE: Total real time: %.2lfs\n", total_time2);
     }
     return iter+1;
 }
@@ -282,7 +294,7 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
     if (tree == NULL){
         tree = new PTree(D, Y, N, bins, 0, iter_cnt);
         //tree->print();
-        //printf("num_insert: %lld\n", num_insert);
+        //printf("PixelSNE: num_insert: %lld\n", num_insert);
     }
     else {
         tree->clean(iter_cnt);
@@ -298,7 +310,7 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
     {
         pos_f = (double*) calloc(N * D, sizeof(double));
         neg_f = (double*) calloc(N * D, sizeof(double));
-        if(pos_f == NULL || neg_f == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+        if(pos_f == NULL || neg_f == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     }
     else
     {
@@ -324,12 +336,12 @@ void PixelSNE::computeExactGradient(double* P, double* Y, int N, int D, double* 
 
     // Compute the squared Euclidean distance matrix
     double* DD = (double*) malloc(N * N * sizeof(double));
-    if(DD == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(DD == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     computeSquaredEuclideanDistance(Y, N, D, DD);
 
     // Compute Q-matrix and normalization sum
     double* Q    = (double*) malloc(N * N * sizeof(double));
-    if(Q == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(Q == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     double sum_Q = .0;
     int nN = 0;
     for(int n = 0; n < N; n++) {
@@ -372,7 +384,7 @@ double PixelSNE::evaluateError(double* P, double* Y, int N, int D) {
     // Compute the squared Euclidean distance matrix
     double* DD = (double*) malloc(N * N * sizeof(double));
     double* Q = (double*) malloc(N * N * sizeof(double));
-    if(DD == NULL || Q == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(DD == NULL || Q == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     computeSquaredEuclideanDistance(Y, N, D, DD);
 
     // Compute Q-matrix and normalization sum
@@ -441,7 +453,7 @@ void PixelSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, dou
 
 	// Compute the squared Euclidean distance matrixgoog
 	double* DD = (double*) malloc(N * N * sizeof(double)); // symmetric metrix
-    if(DD == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(DD == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
 	computeSquaredEuclideanDistance(X, N, D, DD);          // time complexity: O(N^2)
 
 	// Compute the Gaussian kernel row by row
@@ -514,19 +526,19 @@ void PixelSNE::computeGaussianPerplexity(double* X, int N, int D, double* P, dou
 // Compute input similarities with a fixed perplexity using ball trees (this function allocates memory another function should free)
 void PixelSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned long long** _row_P, unsigned long long** _col_P, double** _val_P, double perplexity, int K) {
 
-    if(perplexity > K) printf("Perplexity should be lower than K!\n");
+    if(perplexity > K) printf("PixelSNE: Perplexity should be lower than K!\n");
 
 
     // Allocate the memory we need
     *_row_P = (unsigned long long*)    malloc((N + 1) * sizeof(unsigned long long));
     *_col_P = (unsigned long long*)    calloc(N * K, sizeof(unsigned long long));
     *_val_P = (double*) calloc(N * K, sizeof(double));
-    if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(*_row_P == NULL || *_col_P == NULL || *_val_P == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     unsigned long long* row_P = *_row_P;
     unsigned long long* col_P = *_col_P;
     double* val_P = *_val_P;
     double* cur_P = (double*) malloc((N - 1) * sizeof(double));
-    if(cur_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(cur_P == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     row_P[0] = 0;
     for(int n = 0; n < N; n++) row_P[n + 1] = row_P[n] + (unsigned long long) K;
 
@@ -537,12 +549,12 @@ void PixelSNE::computeGaussianPerplexity(double* X, int N, int D, unsigned long 
     tree->create(obj_X);
 
     // Loop over all points to find nearest neighbors
-    printf("Building tree...\n");
+    printf("PixelSNE: Building tree...\n");
     vector<DataPoint> indices;
     vector<double> distances;
     for(int n = 0; n < N; n++) {
 
-        if(n % 10000 == 0) printf(" - point %d of %d\n", n, N);
+        if(n % 10000 == 0) printf("PixelSNE:  - point %d of %d\n", n, N);
 
         // Find nearest neighbors
         indices.clear();
@@ -625,7 +637,7 @@ void PixelSNE::symmetrizeMatrix(unsigned long long** _row_P, unsigned long long*
 
     // Count number of elements and row counts of symmetric matrix
     int* row_counts = (int*) calloc(N, sizeof(int));
-    if(row_counts == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(row_counts == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     for(int n = 0; n < N; n++) {
         for(int i = row_P[n]; i < row_P[n + 1]; i++) {
 
@@ -648,7 +660,7 @@ void PixelSNE::symmetrizeMatrix(unsigned long long** _row_P, unsigned long long*
     unsigned long long* sym_row_P = (unsigned long long*) malloc((N + 1) * sizeof(unsigned long long));
     unsigned long long* sym_col_P = (unsigned long long*) malloc(no_elem * sizeof(unsigned long long));
     double* sym_val_P = (double*) malloc(no_elem * sizeof(double));
-    if(sym_row_P == NULL || sym_col_P == NULL || sym_val_P == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(sym_row_P == NULL || sym_col_P == NULL || sym_val_P == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
 
     // Construct new row indices for symmetric matrix
     sym_row_P[0] = 0;
@@ -656,7 +668,7 @@ void PixelSNE::symmetrizeMatrix(unsigned long long** _row_P, unsigned long long*
 
     // Fill the result matrix
     int* offset = (int*) calloc(N, sizeof(int));
-    if(offset == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(offset == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     for(int n = 0; n < N; n++) {
         for(unsigned int i = row_P[n]; i < row_P[n + 1]; i++) {                        
 
@@ -726,7 +738,7 @@ void PixelSNE::computeSquaredEuclideanDistance(double* X, int N, int D, double* 
 void PixelSNE::zeroMean(double* X, int N, int D) {
 	// Compute data mean
 	double* mean = (double*) calloc(D, sizeof(double));
-    if(mean == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(mean == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     int nD = 0;
 	for(int n = 0; n < N; n++) {
 		for(int d = 0; d < D; d++) {
@@ -755,7 +767,7 @@ double PixelSNE::minmax(double* X, int N, int D, double beta, unsigned int bins,
     double ran, xran, yran; 
     double* min = (double*) calloc(D, sizeof(double));
     double* max = (double*) calloc(D, sizeof(double));
-    if(min == NULL || max == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(min == NULL || max == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
 
     for (int d = 0 ; d < D; d++) {
         min[d] = INT_MAX;
@@ -837,10 +849,10 @@ void PixelSNE::load_data(const char* inputfile, double **data, int* n, int* d)
 	FILE *fin = fopen(inputfile, "rb");
 	if (fin == NULL)
 	{
-		printf("File not found!\n");
+		printf("PixelSNE: File not found!\n");
 		return;
 	}
-    printf("Reading input file %s ......\n", inputfile);
+    printf("PixelSNE: Reading input file %s ......\n", inputfile);
     res = fscanf(fin, "%d%d", n, d);
 //    dddd = new int(asdfasdf);    
 //	res = fscanf(fin, "%d%d", nnn, dddd);
@@ -854,8 +866,8 @@ void PixelSNE::load_data(const char* inputfile, double **data, int* n, int* d)
 	}
     *data = tmpData;
 	fclose(fin);
-	printf(" Done.\n");
-	printf("Total vertices : %d\tDimension : %d\n", *n, *d);
+	printf("PixelSNE:  Done.\n");
+	printf("PixelSNE: Total vertices : %d\tDimension : %d\n", *n, *d);
 }
 
 // Function that loads data from a t-SNE file
@@ -866,7 +878,7 @@ bool PixelSNE::load_data(const char* inputfile, double** data, int* n, int* d, i
     FILE *h;
     size_t res = -1;
     if((h = fopen(inputfile, "r+b")) == NULL) {
-        printf("Error: could not open data file.\n");
+        printf("PixelSNE: Error: could not open data file.\n");
         return false;
     }
     res = fread(n, sizeof(int), 1, h);                                            
@@ -878,12 +890,12 @@ bool PixelSNE::load_data(const char* inputfile, double** data, int* n, int* d, i
     res = fread(bins, sizeof(unsigned int), 1, h);
 
     *data = (double*) malloc(*d * *n * sizeof(double));
-    if(*data == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+    if(*data == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     res = fread(*data, sizeof(double), *n * *d, h);                               
 
     if(!feof(h)) res = fread(rand_seed, sizeof(int), 1, h);                      
     fclose(h);
-    printf("Read the %i x %i data matrix successfully!\n", *n, *d);
+    printf("PixelSNE: Read the %i x %i data matrix successfully!\n", *n, *d);
 
 
     return true;
@@ -896,7 +908,7 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 	// Open file, write first 2 integers and then the data
 	FILE *h;
 	if((h = fopen("result.dat", "w+b")) == NULL) {
-		printf("Error: could not open data file.\n");
+		printf("PixelSNE: Error: could not open data file.\n");
 		return;
 	}
 	fwrite(&n, sizeof(int), 1, h);
@@ -905,7 +917,7 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 	fwrite(landmarks, sizeof(int), n, h);
     fwrite(costs, sizeof(double), n, h);
     fclose(h);
-	printf("Wrote the %i x %i data matrix successfully!\n", n, d);
+	printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", n, d);
 }
 
 void PixelSNE::updateKNN(int i)
@@ -944,9 +956,9 @@ int main() {
     PixelSNE* pixelsne = new PixelSNE();
 
     // #ifdef USE_BITWISE_OP
-    //     printf("pixelsne.cpp USE_BITWISE_OP\n");
+    //     printf("PixelSNE: pixelsne.cpp USE_BITWISE_OP\n");
     // #else
-    //     printf("pixelsne.cpp not USE_BITWISE_OP\n");
+    //     printf("PixelSNE: pixelsne.cpp not USE_BITWISE_OP\n");
     // #endif
 
 	//Op
@@ -966,12 +978,12 @@ int main() {
         N = origN;
 
         int* landmarks = (int*) malloc(N * sizeof(int));        
-        if(landmarks == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+        if(landmarks == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
         for(int n = 0; n < N; n++) landmarks[n] = n;            
 
         double* Y = (double*) malloc(N * no_dims * sizeof(double)); 
 		double* costs = (double*) calloc(N, sizeof(double));         
-        if(Y == NULL || costs == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+        if(Y == NULL || costs == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
         
         pixelsne->run(data, N, D, Y, no_dims, perplexity, theta, bins, p_method, rand_seed, false);
 		pixelsne->save_data(Y, landmarks, costs, N, no_dims);

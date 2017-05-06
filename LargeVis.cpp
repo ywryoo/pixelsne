@@ -1,7 +1,7 @@
 #include "LargeVis.h"
 #include <map>
 #include <float.h>
-
+#define BILLION 1000000000L
 clock_t start, end;
 LargeVis::LargeVis()
 {
@@ -10,6 +10,7 @@ LargeVis::LargeVis()
 	annoy_index = NULL;
 	head = alias = NULL;
     neg_table = NULL;
+	knn_not_changed = NULL;
 }
 
 const gsl_rng_type *LargeVis::gsl_T = NULL;
@@ -24,6 +25,7 @@ void LargeVis::clean_model()
 	if (annoy_index) delete annoy_index;
 	if (neg_table) delete[] neg_table;
 	if (alias) delete[] alias;
+	if (knn_not_changed) delete[] knn_not_changed; knn_not_changed = NULL;
 	vis = prob = NULL;
 	knn_vec = old_knn_vec = NULL;
 	annoy_index = NULL;
@@ -55,10 +57,10 @@ void LargeVis::load_from_file(char *infile)
 	FILE *fin = fopen(infile, "rb");
 	if (fin == NULL)
 	{
-		printf("\nFile not found!\n");
+		printf("LargeVis: \nFile not found!\n");
 		return;
 	}
-    printf("Reading input file %s ......", infile); fflush(stdout);
+    printf("LargeVis: Reading input file %s ......", infile); fflush(stdout);
 	res = fscanf(fin, "%lld%lld", &n_vertices, &n_dim);
 	vec = new real[n_vertices * n_dim];
 	for (long long i = 0; i < n_vertices; ++i)
@@ -69,8 +71,8 @@ void LargeVis::load_from_file(char *infile)
 		}
 	}
 	fclose(fin);
-	printf(" Done.\n");
-	printf("Total vertices : %lld\tDimension : %lld\n", n_vertices, n_dim);
+	printf("LargeVis:  Done.\n");
+	printf("LargeVis: Total vertices : %lld\tDimensions : %lld\n", n_vertices, n_dim);
 }
 
 void LargeVis::load_from_data(real *data, long long n_vert, long long n_di)
@@ -79,7 +81,7 @@ void LargeVis::load_from_data(real *data, long long n_vert, long long n_di)
 	vec = data;
 	n_vertices = n_vert;
 	n_dim = n_di;
-	printf("Total vertices : %lld\tDimension : %lld\n", n_vertices, n_dim);
+	printf("LargeVis: Total vertices : %lld\tDimensions : %lld\n", n_vertices, n_dim);
 }
 
 void LargeVis::load_from_data(double *data, long long n_vert, long long n_di)
@@ -89,7 +91,7 @@ void LargeVis::load_from_data(double *data, long long n_vert, long long n_di)
 
 	vec = new real[n_vert * n_di];
     if(vec == NULL) { 
-    	printf("Memory allocation failed!\n"); exit(1);
+    	printf("LargeVis: Memory allocation failed!\n"); exit(1);
     }
 
 	//int nD = 0;
@@ -101,7 +103,7 @@ void LargeVis::load_from_data(double *data, long long n_vert, long long n_di)
 	}
 	n_vertices = n_vert;
 	n_dim = n_di;
-	printf("Total vertices : %lld\tDimension : %lld\n", n_vertices, n_dim);
+	printf("LargeVis: Total vertices : %lld\tDimension : %lld\n", n_vertices, n_dim);
 }
 
 void LargeVis::load_from_graph(char *infile)
@@ -116,10 +118,10 @@ void LargeVis::load_from_graph(char *infile)
 	FILE *fin = fopen(infile, "rb");
 	if (fin == NULL)
 	{
-		printf("\nFile not found!\n");
+		printf("LargeVis: \nFile not found!\n");
 		return;
 	}
-	printf("Reading input file %s ......%c", infile, 13);
+	printf("LargeVis: Reading input file %s ......%c", infile, 13);
 	while (fscanf(fin, "%s%s%f", w1, w2, &weight) == 3)
 	{
 		if (!dict.count(w1)) { dict[w1] = n_vertices++; names.push_back(w1); }
@@ -133,7 +135,7 @@ void LargeVis::load_from_graph(char *infile)
 		++n_edge;
 		if (n_edge % 5000 == 0)
 		{
-			printf("Reading input file %s ...... %lldK edges%c", infile, n_edge / 1000, 13);
+			printf("LargeVis: Reading input file %s ...... %lldK edges%c", infile, n_edge / 1000, 13);
 			fflush(stdout);
 		}
 	}
@@ -149,7 +151,7 @@ void LargeVis::load_from_graph(char *infile)
 		next[p] = head[x];
 		head[x] = p;
 	}
-	printf("\nTotal vertices : %lld\tTotal edges : %lld\n", n_vertices, n_edge);
+	printf("LargeVis: \nTotal vertices : %lld\tTotal edges : %lld\n", n_vertices, n_edge);
 }
 
 void LargeVis::save(char *outfile)
@@ -186,7 +188,7 @@ long long LargeVis::get_out_dim()
 
 void LargeVis::normalize()
 {
-    printf("Normalizing ......"); fflush(stdout);
+    printf("LargeVis: Normalizing ......"); fflush(stdout);
 	real *mean = new real[n_dim];
 	for (long long i = 0; i < n_dim; ++i) mean[i] = 0;
 	for (long long i = 0, ll = 0; i < n_vertices; ++i, ll += n_dim)
@@ -208,7 +210,7 @@ void LargeVis::normalize()
 	for (long long i = 0; i < n_vertices * n_dim; ++i)
 		vec[i] /= mX;
 	delete[] mean;
-	printf(" Done.\n");
+	printf("LargeVis:  Done.\n");
 }
 
 real LargeVis::CalcDist(long long x, long long y)
@@ -307,7 +309,7 @@ void *LargeVis::annoy_thread_caller(void *arg)
 
 void LargeVis::run_annoy()
 {
-    printf("Running ANNOY ......"); fflush(stdout);
+    printf("LargeVis: Running ANNOY ......"); fflush(stdout);
 	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
 	
 	
@@ -323,7 +325,7 @@ void LargeVis::run_annoy()
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
     delete annoy_index; annoy_index = NULL;
-	printf(" Done.\n");
+	printf("LargeVis:  Done.\n");
 }
 
 void LargeVis::propagation_thread(int id)
@@ -377,7 +379,7 @@ void LargeVis::run_propagation()
 {
 	for (int i = 0; i < n_propagations; ++i)
 	{
-		printf("Running propagation %d/%lld%c", i + 1, n_propagations, 13);
+		printf("LargeVis: Running propagation %d/%lld%c", i + 1, n_propagations, 13);
 		fflush(stdout);
 		old_knn_vec = knn_vec;
 		knn_vec = new std::vector<int>[n_vertices];
@@ -388,7 +390,7 @@ void LargeVis::run_propagation()
 		delete[] old_knn_vec;
 		old_knn_vec = NULL;
 	}
-	printf("\n");
+	printf("LargeVis: \n");
 }
 
 void LargeVis::compute_similarity_thread(int id)
@@ -399,6 +401,8 @@ void LargeVis::compute_similarity_thread(int id)
 	real beta, lo_beta, hi_beta, sum_weight, H, tmp;
 	for (x = lo; x < hi; ++x)
 	{
+		if(knn_not_changed[x]) continue;
+
 		beta = 1;
 		lo_beta = hi_beta = -1;
 		for (iter = 0; iter < 200; ++iter)
@@ -429,15 +433,12 @@ void LargeVis::compute_similarity_thread(int id)
 			sum_weight += edge_weight[p] = exp(-beta * edge_weight[p]);
 
 		}
-		if(x == 0)
-			printf("%f\n", edge_weight[head[x]]);
-
+		
 		for (p = head[x]; p >= 0; p = next[p])
 		{
 			edge_weight[p] /= sum_weight;
 		}
-		if(x == 0)
-			printf("%f\n%f\n", sum_weight, edge_weight[head[x]]);
+
 	}
 }
 
@@ -476,7 +477,7 @@ void *LargeVis::search_reverse_thread_caller(void *arg)
 
 void LargeVis::compute_similarity()
 {
-    printf("Computing similarities ......\n"); fflush(stdout);
+    printf("LargeVis: Computing similarities ......\n"); fflush(stdout);
 	n_edge = 0;
 	head = new long long[n_vertices];
 	long long i, x, y, p, q;
@@ -528,7 +529,7 @@ void LargeVis::compute_similarity()
 		}
 	}
 
-	printf(" Done.\n");
+	printf("LargeVis:  Done.\n");
 }
 
 void LargeVis::test_accuracy()
@@ -553,22 +554,35 @@ void LargeVis::test_accuracy()
 		}
 	}
     delete heap;
-	printf("Test knn accuracy : %.2f%%\n", hit_case * 100.0 / (test_case * n_neighbors));
+	printf("LargeVis: Test knn accuracy : %.2f%%\n", hit_case * 100.0 / (test_case * n_neighbors));
 }
 
 void LargeVis::construt_knn()
 {	
+	struct timespec start_p, end_p;
 	start = clock();
+	clock_gettime(CLOCK_MONOTONIC, &start_p);
 
 	normalize();
 	run_annoy();
 	//run_propagation();
 	test_accuracy();
+
+	if(knn_not_changed == NULL)
+	{
+		knn_not_changed = (bool *) malloc(n_vertices * sizeof(bool));
+		for(int i = 0; i < n_vertices; ++i) knn_not_changed[i] = false;
+	}
+
 	compute_similarity();
 	
 	end = clock();
+	clock_gettime(CLOCK_MONOTONIC, &end_p);
+	double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
+	printf("LargeVis: Construct_knn total real time: %.2f seconds!\n", elapsed);
+
 	clock_t tt = end - start;
-	printf("construct_knn total time: %.2f secs.\n", (float)tt / CLOCKS_PER_SEC);
+	printf("LargeVis: Construct_knn total clock time: %.2f secs.\n", (float)tt / CLOCKS_PER_SEC);
 	/*FILE *fout = fopen("knn_graph.txt", "wb");
 	for (long long p = 0; p < n_edge; ++p)
 	{
@@ -627,7 +641,7 @@ void LargeVis::visualize_thread(int id)
 			last_edge_count = edge_count;
 			cur_alpha = initial_alpha * (1 - edge_count_actual / (n_samples + 1.0));
 			if (cur_alpha < initial_alpha * 0.0001) cur_alpha = initial_alpha * 0.0001;
-			printf("%cFitting model\tAlpha: %f Progress: %.3lf%%", 13, cur_alpha, (real)edge_count_actual / (real)(n_samples + 1) * 100);
+			printf("LargeVis: %cFitting model\tAlpha: %f Progress: %.3lf%%", 13, cur_alpha, (real)edge_count_actual / (real)(n_samples + 1) * 100);
 			fflush(stdout);
 		}
 		p = sample_an_edge(gsl_rng_uniform(gsl_r), gsl_rng_uniform(gsl_r));
@@ -685,7 +699,7 @@ void LargeVis::visualize()
 	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::visualize_thread_caller, new arg_struct(this, j));
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
-	printf("\n");
+	printf("LargeVis: \n");
 }
 
 void LargeVis::get_result(unsigned long long** row_P, unsigned long long** col_P, double** val_P)
@@ -693,13 +707,13 @@ void LargeVis::get_result(unsigned long long** row_P, unsigned long long** col_P
 
 	long long size = edge_to.size();
 
-	printf("size: %lld\n", size);
+	printf("LargeVis: knn edge size: %lld\n", size);
 
 	*row_P = (unsigned long long*)malloc((n_vertices + 1) * sizeof(unsigned long long));
 	*col_P = (unsigned long long*)malloc(size * sizeof(unsigned long long));
 	*val_P = (double*)malloc(size * sizeof(double));
 
-	printf("n_vertices: %lld, n_vertices*n_neighbors: %lld\n", n_vertices, n_vertices*n_neighbors);
+	printf("LargeVis: n_vertices: %lld, n_vertices*n_neighbors: %lld\n", n_vertices, n_vertices*n_neighbors);
 
 	int need_log = 0;
 
@@ -720,8 +734,8 @@ void LargeVis::get_result(unsigned long long** row_P, unsigned long long** col_P
 			(*col_P)[cnt] = edge_to[p];
 			(*val_P)[cnt] = edge_weight[p];
 			
-			//printf("col_P[%lld]=%d\n", row_cnt-1, edge_to[p]);
-			//printf("val_P[%lld]=%f\n", row_cnt-1, edge_weight[p]);
+			//printf("LargeVis: col_P[%lld]=%d\n", row_cnt-1, edge_to[p]);
+			//printf("LargeVis: val_P[%lld]=%f\n", row_cnt-1, edge_weight[p]);
 			// if (need_log){
 			// 	sprintf(temp_str, "%lld %lld %f\n",(*row_P)[x], (*col_P)[cnt], (*val_P)[cnt]);
 	  //       	fwrite(temp_str, strlen(temp_str), 1, fp_saved);
@@ -735,7 +749,7 @@ void LargeVis::get_result(unsigned long long** row_P, unsigned long long** col_P
 
 	//fclose(fp_saved);	
 
-	printf("get_result: out\n");
+	printf("LargeVis: P Exported(get_result)\n");
 }
 
 void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long long n_prop, real alph, long long n_tree, long long n_nega, long long n_neig, real gamm, real perp)
@@ -748,7 +762,7 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	clean_model();
 	if (!vec && !head)
 	{
-		printf("Missing training data!\n");
+		printf("LargeVis: Missing training data!\n");
 		return;
 	}
 	out_dim = out_d < 0 ? 2 : out_d;
@@ -782,24 +796,44 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 			n_trees = 50;
 		else n_trees = 100;
 	}
-	printf("%lld\n", n_threads);
+	printf("LargeVis: Threads: %lld\n", n_threads);
 	if (vec) { clean_graph(); construt_knn(); }
 	//visualize();
 }
 
 void LargeVis::run_propagation_once(int i)
 {
-	printf("Running propagation %d\n", i + 1);
+	printf("LargeVis: Running propagation %d\n", i + 1);
 	fflush(stdout);
+
+	int cnt = 0;
+
 	old_knn_vec = knn_vec;
 	knn_vec = new std::vector<int>[n_vertices];
 	pthread_t *pt = new pthread_t[n_threads];
 	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::propagation_thread_caller, new arg_struct(this, j));
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
+
+	for(int i = 0; i < n_vertices ; ++i)
+	{
+		if(old_knn_vec[i] == knn_vec[i])
+		{
+			knn_not_changed[i] = true;
+			cnt++;
+		}
+		else
+		{
+			knn_not_changed[i] = false;
+		}
+	}
+
+	printf("LargeVis: KNN Catch: %d\n", cnt);
+
 	delete[] old_knn_vec;
 	old_knn_vec = NULL;
 	test_accuracy();
 	clean_graph();
 	compute_similarity();
+	//TODO need to free memory of knn_not_changed, vec, knn_vec when last result is read;
 }

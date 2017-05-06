@@ -40,6 +40,7 @@ private:
 	real *prob;
 	static const gsl_rng_type * gsl_T;
 	static gsl_rng * gsl_r;
+	bool *knn_not_changed;
 
 	void clean_model();
 	void clean_data();
