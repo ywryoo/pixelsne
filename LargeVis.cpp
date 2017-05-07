@@ -829,12 +829,19 @@ void LargeVis::run_propagation_once(int i)
 	printf("LargeVis: KNN Catch: %d\n", cnt);
 	clock_gettime(CLOCK_MONOTONIC, &end_p);
 	double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-	printf("LargeVis: propagation %d: %.2f real seconds!\n", i + 1, elapsed);
+	printf("LargeVis: Propagation %d: %.2f real seconds!\n", i + 1, elapsed);
 
 	delete[] old_knn_vec;
 	old_knn_vec = NULL;
 	test_accuracy();
+	clock_gettime(CLOCK_MONOTONIC, &start_p);
+
 	clean_graph();
 	compute_similarity();
+
+	clock_gettime(CLOCK_MONOTONIC, &end_p);
+	elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
+	printf("LargeVis: Similarity %d: %.2f real seconds!\n", i + 1, elapsed);
+
 	//TODO need to free memory of knn_not_changed, vec, knn_vec when last result is read;
 }
