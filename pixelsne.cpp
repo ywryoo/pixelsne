@@ -191,8 +191,6 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     else printf("PixelSNE: Input similarities computed in %4.2f clock seconds (sparsity = %f)!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
 
     beta = bins * bins * 1e3;
-    start = clock();
-    clock_gettime(CLOCK_MONOTONIC, &start_p3);
     tree = NULL;
 	/*
 	for(int iter = 0; iter < max_iter; iter++) {
@@ -216,6 +214,12 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 }
 
 int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+    if(iter == 0)
+    {
+        start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &start_p3);
+    }
+    
     if(KNNupdated)
     {
         free(row_P);
