@@ -94,7 +94,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
     if(exact) { 
         // Compute similarities
-        printf("PixelSNE: Exact?");
+        printf("PixelSNE: Exact?\n");
     }
 
     else {  
@@ -224,7 +224,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         row_P = new_row_P;
         col_P = new_col_P;
         val_P = new_val_P;
-        if(iter < stop_lying_iter) {
+        if(iter <= stop_lying_iter) {
             if(exact) {  if(P != NULL) for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
             else {      for(int i = 0; i < row_P[tempN]; i++) val_P[i] *= 12.0; }
         }
