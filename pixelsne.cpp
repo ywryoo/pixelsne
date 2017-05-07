@@ -180,8 +180,8 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     total_time2 = elapsed2;
 
 	// Perform main training loop
-    if(exact) printf("PixelSNE: Input similarities computed in %4.2f clock seconds!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
-    else printf("PixelSNE: Input similarities computed in %4.2f clock seconds (sparsity = %f)!\nLearning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
+    if(exact) printf("PixelSNE: Input similarities computed in %4.2f clock seconds!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
+    else printf("PixelSNE: Input similarities computed in %4.2f clock seconds (sparsity = %f)!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
 
     beta = bins * bins * 1e3;
     start = clock();
@@ -218,8 +218,8 @@ int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsig
         col_P = new_col_P;
         val_P = new_val_P;
         if(iter < stop_lying_iter) {
-            if(exact) { for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
-            else {      for(int i = 0; i < new_row_P[tempN]; i++) new_val_P[i] *= 12.0; }
+            if(exact) {  if(P != NULL) for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
+            else {      for(int i = 0; i < row_P[tempN]; i++) val_P[i] *= 12.0; }
         }
         KNNupdated = false;
     }
