@@ -20,6 +20,7 @@ private:
     PTree* tree;
     float total_time;
     double total_time2;
+    double total_time3;
     clock_t start, end;
     double momentum, final_momentum;
     double eta;

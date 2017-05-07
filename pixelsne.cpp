@@ -184,7 +184,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
     double elapsed2  = (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION;
     printf("PixelSNE: Input similarities computed in %4.2lf real seconds!(P included)\n", elapsed2);
-    total_time2 = elapsed2;
+    total_time3 = total_time2 = elapsed2;
 
 	// Perform main training loop
     if(exact) printf("PixelSNE: Input similarities computed in %4.2f clock seconds!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
@@ -290,9 +290,12 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         printf("PixelSNE: Fitting performed in %4.2f clock seconds.\n", total_time);
         double elapsed3  = (double)(end_p3.tv_sec - start_p3.tv_sec) + (double)(end_p3.tv_nsec - start_p3.tv_nsec)/BILLION;
         printf("PixelSNE: Initialization: %.2lf real seconds\n", total_time2);
+        printf("PixelSNE: Initialization with propagation: %.2lf real seconds\n", total_time3);
         printf("PixelSNE: Fitting performed in %4.2f real seconds!\n", elapsed3);
         total_time2 += elapsed3;
         printf("PixelSNE: Total real time: %.2lfs\n", total_time2);
+        total_time3 += elapsed3;
+        printf("PixelSNE: Propagation included Total real time: %.2lfs(total for not pipelined case)\n", total_time3);
     }
     return iter+1;
 }
@@ -934,6 +937,7 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 
 void PixelSNE::updateKNN(int i)
 {
+    clock_gettime(CLOCK_MONOTONIC, &start_p2);
     p_model->run_propagation_once(i, knn_validation);
     
 	p_model->get_result(&new_row_P, &new_col_P, &new_val_P);
@@ -944,6 +948,9 @@ void PixelSNE::updateKNN(int i)
 	for(int i = 0; i < new_row_P[tempN]; i++) {
 		new_val_P[i] /= sum_P;
 	}
+
+    clock_gettime(CLOCK_MONOTONIC, &end_p2);
+    total_time3 += (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION;
 
     KNNupdated = true;
 }
