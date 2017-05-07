@@ -423,7 +423,10 @@ void LargeVis::compute_similarity_thread(int id)
 	real beta, lo_beta, hi_beta, sum_weight, H, tmp;
 	for (x = lo; x < hi; ++x)
 	{
-		if(knn_not_changed[x]) continue;
+	//	if(knn_not_changed[x]) continue;
+	// this can reduce time and error, but overall 
+	// shape is bad and orphans make graph dirty
+	// plus, time reduction is low so new method should be required
 
 		beta = 1;
 		lo_beta = hi_beta = -1;
