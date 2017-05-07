@@ -1,3 +1,5 @@
+/// from PixelSNE: https://github.com/awesome-davian/pixelsne
+
 #ifndef PTREE_H
 #define PTREE_H
 

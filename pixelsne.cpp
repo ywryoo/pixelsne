@@ -1,6 +1,10 @@
+/// from PixelSNE: https://github.com/awesome-davian/pixelsne
+/// Modified by Ryangwook Ryoo, 2017
+
 #include <math.h>
 #include <float.h>
 #include <limits.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <cstring>
@@ -40,8 +44,11 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, int n_threads, bool skip_random_init, int max_iter, int stop_lying_iter, 
-               int mom_switch_iter) { 
+               unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, int max_iter, int stop_lying_iter, 
+               int mom_switch_iter) {
+    knn_validation = isValidation; 
+    max_iteration = max_iter;
+    n_propagations = propagation_num;
                 tempN = N;
     // Set random seed
     if (skip_random_init != true) {
@@ -100,13 +107,13 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         if (p_method != 1) {
             printf("PixelSNE: P Method: Construct_KNN\n");
 
-            long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1, n_trees = -1, n_propagation = -1;
+            long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1;
             long long threadNum = n_threads;
             real alpha = -1, n_gamma = -1;
 
             p_model = new LargeVis();
             p_model->load_from_data(X, N, D);
-            p_model->run(out_dim, threadNum, n_samples, n_propagation, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
+            p_model->run(out_dim, threadNum, n_samples, n_propagations, alpha, n_trees, n_negative, n_neighbors, n_gamma, perplexity);
             p_model->get_result(&row_P, &col_P, &val_P);
 
             int need_log = 0;
@@ -208,7 +215,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     printf("PixelSNE: Fitting performed in %4.2f seconds.\n", total_time);*/
 }
 
-int PixelSNE::updatePoints(double* Y, int &N, int &no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     if(KNNupdated)
     {
         free(row_P);
@@ -923,7 +930,7 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 
 void PixelSNE::updateKNN(int i)
 {
-    p_model->run_propagation_once(i);
+    p_model->run_propagation_once(i, knn_validation);
     
 	p_model->get_result(&new_row_P, &new_col_P, &new_val_P);
 	double sum_P = .0;
@@ -936,6 +943,17 @@ void PixelSNE::updateKNN(int i)
 
     KNNupdated = true;
 }
+
+int PixelSNE::get_propagation_num()
+{
+	return (int)n_propagations;
+}
+
+int PixelSNE::get_max_iter()
+{
+	return (int)max_iteration;
+}
+
 
 /*
 // Function that runs the Barnes-Hut implementation of t-SNE

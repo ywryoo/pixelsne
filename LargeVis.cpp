@@ -1,3 +1,21 @@
+/*
+   Copyright 2016 LargeVis authors
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+   Modified by Ryangwook Ryoo
+*/
+
 #include "LargeVis.h"
 #include <map>
 #include <float.h>
@@ -308,6 +326,7 @@ void *LargeVis::annoy_thread_caller(void *arg)
 
 void LargeVis::run_annoy()
 {
+    printf("LargeVis: n_tress: %d\n", n_trees);
     printf("LargeVis: Running ANNOY ......\n");
 	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
 	
@@ -337,6 +356,11 @@ void LargeVis::propagation_thread(int id)
 	for (x = 0; x < n_vertices; ++x) check[x] = -1;
 	for (x = lo; x < hi; ++x)
 	{
+		if(knn_not_changed[x])
+		{
+			knn_vec[x] = old_knn_vec[x];
+			continue;
+		}
 		check[x] = x;
 		std::vector<int> &v1 = old_knn_vec[x];
 		l1 = v1.size();
@@ -798,7 +822,7 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	//visualize();
 }
 
-void LargeVis::run_propagation_once(int i)
+void LargeVis::run_propagation_once(int i, bool knn_validation)
 {
 	printf("LargeVis: Running propagation %d\n", i + 1);
 	struct timespec start_p, end_p;
@@ -813,16 +837,19 @@ void LargeVis::run_propagation_once(int i)
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
 
-	for(int i = 0; i < n_vertices ; ++i)
+	if(knn_validation)
 	{
-		if(old_knn_vec[i] == knn_vec[i])
+		for(int i = 0; i < n_vertices ; ++i)
 		{
-			knn_not_changed[i] = true;
-			cnt++;
-		}
-		else
-		{
-			knn_not_changed[i] = false;
+			if(old_knn_vec[i] == knn_vec[i])
+			{
+				knn_not_changed[i] = true;
+				cnt++;
+			}
+			else
+			{
+				knn_not_changed[i] = false;
+			}
 		}
 	}
 

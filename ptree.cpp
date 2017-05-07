@@ -1,3 +1,5 @@
+/// from PixelSNE: https://github.com/awesome-davian/pixelsne
+
 #include <math.h>
 #include <float.h>
 #include <stdlib.h>
