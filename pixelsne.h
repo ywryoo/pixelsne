@@ -17,12 +17,8 @@ private:
 	struct timespec start_p, end_p;
     struct timespec start_p2, end_p2;
     bool exact;
-    bool isVptree;
+    bool isLogging;
     PTree* tree;
-    double fitting_cpu_time;
-    double fitting_real_time;
-    double init_real_time;
-    double init_cpu_time;
     clock_t start, end;
     clock_t start2, end2;
     clock_t tt;
@@ -33,6 +29,8 @@ private:
     double* uY;
     double* gains;
     double* P;
+    double temptime1;
+    double temptime2;
     double* pos_f = NULL;
     double* neg_f = NULL;
     int tempN;
@@ -50,6 +48,12 @@ private:
     int max_iteration;
     int n_propagations;
 public:
+    double fitting_cpu_time;
+    double fitting_real_time;
+    double propagation_cpu_time;
+    double propagation_real_time;
+    double init_real_time;
+    double init_cpu_time;
     PixelSNE();
     ~PixelSNE();
     void run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
@@ -58,11 +62,13 @@ public:
     void load_data(const char* inputfile, double **data, int* n, int* d);
     bool load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed);
     void save_data(double* data, int* landmarks, double* costs, int n, int d);
+    void save_data(const char* outfile, double* Y, int N, int D, double theta, unsigned int bins, int iter);
     void symmetrizeMatrix(unsigned long long** row_P, unsigned long long** col_P, double** val_P, int N); // should be static!
     int updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter);
     void updateKNN(int i);
     int get_propagation_num();
     int get_max_iter();
+    void save_P(char *filename);
 private:
     void computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, double beta, unsigned int bins, int iter_cnt);
     void computeExactGradient(double* P, double* Y, int N, int D, double* dC);
