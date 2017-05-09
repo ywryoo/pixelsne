@@ -20,7 +20,7 @@
 #include <map>
 #include <float.h>
 #define BILLION 1000000000L
-clock_t start, end;
+clock_t sstart, eend;
 LargeVis::LargeVis()
 {
 	vec = vis = prob = NULL;
@@ -75,7 +75,7 @@ void LargeVis::load_from_file(char *infile)
 	FILE *fin = fopen(infile, "rb");
 	if (fin == NULL)
 	{
-		printf("LargeVis: \nFile not found!\n");
+		printf("LargeVis: File not found!\n");
 		return;
 	}
     printf("LargeVis: Reading input file %s ......\n", infile);
@@ -89,7 +89,7 @@ void LargeVis::load_from_file(char *infile)
 		}
 	}
 	fclose(fin);
-	printf("LargeVis:  Done.\n");
+	printf("LargeVis: Reading input file Done.\n");
 	printf("LargeVis: Total vertices : %lld\tDimensions : %lld\n", n_vertices, n_dim);
 }
 
@@ -136,7 +136,7 @@ void LargeVis::load_from_graph(char *infile)
 	FILE *fin = fopen(infile, "rb");
 	if (fin == NULL)
 	{
-		printf("LargeVis: \nFile not found!\n");
+		printf("LargeVis: File not found!\n");
 		return;
 	}
 	printf("LargeVis: Reading input file %s ......%c", infile, 13);
@@ -227,7 +227,7 @@ void LargeVis::normalize()
 	for (long long i = 0; i < n_vertices * n_dim; ++i)
 		vec[i] /= mX;
 	delete[] mean;
-	printf("LargeVis:  Done.\n");
+	printf("LargeVis: Normalizing Done.\n");
 }
 
 real LargeVis::CalcDist(long long x, long long y)
@@ -237,57 +237,6 @@ real LargeVis::CalcDist(long long x, long long y)
 	for (i = 0; i < n_dim; ++i)
 		ret += (vec[lx + i] - vec[ly + i]) * (vec[lx + i] - vec[ly + i]);
 	return ret;
-}
-
-void LargeVis::init_alias_table()
-{
-	alias = new long long[n_edge];
-	prob = new real[n_edge];
-
-	real *norm_prob = new real[n_edge];
-	long long *large_block = new long long[n_edge];
-	long long *small_block = new long long[n_edge];
-
-	real sum = 0;
-	long long cur_small_block, cur_large_block;
-	long long num_small_block = 0, num_large_block = 0;
-
-	for (long long k = 0; k < n_edge; ++k) sum += edge_weight[k];
-	for (long long k = 0; k < n_edge; ++k) norm_prob[k] = edge_weight[k] * n_edge / sum;
-
-	for (long long k = n_edge - 1; k >= 0; --k)
-	{
-		if (norm_prob[k] < 1)
-			small_block[num_small_block++] = k;
-		else
-			large_block[num_large_block++] = k;
-	}
-
-	while (num_small_block && num_large_block)
-	{
-		cur_small_block = small_block[--num_small_block];
-		cur_large_block = large_block[--num_large_block];
-		prob[cur_small_block] = norm_prob[cur_small_block];
-		alias[cur_small_block] = cur_large_block;
-		norm_prob[cur_large_block] = norm_prob[cur_large_block] + norm_prob[cur_small_block] - 1;
-		if (norm_prob[cur_large_block] < 1)
-			small_block[num_small_block++] = cur_large_block;
-		else
-			large_block[num_large_block++] = cur_large_block;
-	}
-
-	while (num_large_block) prob[large_block[--num_large_block]] = 1;
-	while (num_small_block) prob[small_block[--num_small_block]] = 1;
-
-	delete[] norm_prob;
-	delete[] small_block;
-	delete[] large_block;
-}
-
-long long LargeVis::sample_an_edge(real rand_value1, real rand_value2)
-{
-	long long k = (long long)((n_edge - 0.1) * rand_value1);
-	return rand_value2 <= prob[k] ? k : alias[k];
 }
 
 void LargeVis::annoy_thread(int id)
@@ -327,7 +276,7 @@ void *LargeVis::annoy_thread_caller(void *arg)
 void LargeVis::run_annoy()
 {
     printf("LargeVis: n_tress: %d\n", n_trees);
-    printf("LargeVis: Running ANNOY ......\n");
+    printf("LargeVis: Running ANNOY(Generating RP Trees) ......\n");
 	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
 	
 	
@@ -343,7 +292,7 @@ void LargeVis::run_annoy()
 	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
 	delete[] pt;
     delete annoy_index; annoy_index = NULL;
-	printf("LargeVis:  Done.\n");
+	printf("LargeVis: Running ANNOY(Generating RP Trees) Done.\n");
 }
 
 void LargeVis::propagation_thread(int id)
@@ -402,7 +351,7 @@ void LargeVis::run_propagation()
 {
 	for (int i = 0; i < n_propagations; ++i)
 	{
-		printf("LargeVis: Running propagation %d/%lld%c\n", i + 1, n_propagations, 13);
+		printf("LargeVis: Running Propagation %d/%lld%c\n", i + 1, n_propagations, 13);
 		old_knn_vec = knn_vec;
 		knn_vec = new std::vector<int>[n_vertices];
 		pthread_t *pt = new pthread_t[n_threads];
@@ -412,7 +361,7 @@ void LargeVis::run_propagation()
 		delete[] old_knn_vec;
 		old_knn_vec = NULL;
 	}
-	printf("LargeVis: \n");
+	printf("LargeVis: Running Propagations Done\n");
 }
 
 void LargeVis::compute_similarity_thread(int id)
@@ -424,7 +373,7 @@ void LargeVis::compute_similarity_thread(int id)
 	for (x = lo; x < hi; ++x)
 	{
 	//	if(knn_not_changed[x]) continue;
-	// this can reduce time and error, but overall 
+	// FIXME: this can reduce time and error, but overall 
 	// shape is bad and orphans make graph dirty
 	// plus, time reduction is low so new method should be required
 
@@ -554,7 +503,7 @@ void LargeVis::compute_similarity()
 		}
 	}
 
-	printf("LargeVis:  Done.\n");
+	printf("LargeVis: Computing similarities Done.\n");
 }
 
 void LargeVis::test_accuracy()
@@ -584,13 +533,19 @@ void LargeVis::test_accuracy()
 
 void LargeVis::construt_knn()
 {	
-	struct timespec start_p, end_p;
-	start = clock();
-	clock_gettime(CLOCK_MONOTONIC, &start_p);
+	sstart = clock();
+	clock_gettime(CLOCK_MONOTONIC, &sstart_p);
 
 	normalize();
 	run_annoy();
-	//run_propagation();
+
+	eend = clock();
+	clock_gettime(CLOCK_MONOTONIC, &eend_p);
+
+	real_time[0] = (double)(eend_p.tv_sec - sstart_p.tv_sec) + (double)(eend_p.tv_nsec - sstart_p.tv_nsec)/BILLION;
+	ttt = eend - sstart;
+	cpu_time[0] = (double)ttt / CLOCKS_PER_SEC;
+
 	test_accuracy();
 
 	if(knn_not_changed == NULL)
@@ -599,131 +554,24 @@ void LargeVis::construt_knn()
 		for(int i = 0; i < n_vertices; ++i) knn_not_changed[i] = false;
 	}
 
+	sstart = clock();
+	clock_gettime(CLOCK_MONOTONIC, &sstart_p);
+
 	compute_similarity();
 	
-	end = clock();
-	clock_gettime(CLOCK_MONOTONIC, &end_p);
-	double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-	printf("LargeVis: Construct_knn total real time: %.2f seconds!\n", elapsed);
+	eend = clock();
+	clock_gettime(CLOCK_MONOTONIC, &eend_p);
 
-	clock_t tt = end - start;
-	printf("LargeVis: Construct_knn total clock time: %.2f secs.\n", (float)tt / CLOCKS_PER_SEC);
-	/*FILE *fout = fopen("knn_graph.txt", "wb");
-	for (long long p = 0; p < n_edge; ++p)
-	{
-		fprintf(fout, "%lld %lld ", edge_from[p], edge_to[p]);
-		double tmp = edge_weight[p];
-		fwrite(&tmp, sizeof(double), 1, fout);
-		fprintf(fout, "\n");
-	}
-	fclose(fout);*/
-}
+	real_time[1] = (double)(eend_p.tv_sec - sstart_p.tv_sec) + (double)(eend_p.tv_nsec - sstart_p.tv_nsec)/BILLION;
+	ttt = eend - sstart;
+	cpu_time[1] = (double)ttt / CLOCKS_PER_SEC;
 
-void LargeVis::init_neg_table()
-{
-	long long x, p, i;
-	neg_size = 1e8;
-    reverse.clear(); vector<long long> (reverse).swap(reverse);
-	real sum_weights = 0, dd, *weights = new real[n_vertices];
-	for (i = 0; i < n_vertices; ++i) weights[i] = 0;
-	for (x = 0; x < n_vertices; ++x)
-	{
-		for (p = head[x]; p >= 0; p = next[p])
-		{
-			weights[x] += edge_weight[p];
-		}
-		sum_weights += weights[x] = pow(weights[x], 0.75);
-	}
-    next.clear(); vector<long long> (next).swap(next);
-    delete[] head; head = NULL;
-	neg_table = new int[neg_size];
-	dd = weights[0];
-	for (i = x = 0; i < neg_size; ++i)
-	{
-		neg_table[i] = x;
-		if (i / (real)neg_size > dd / sum_weights && x < n_vertices - 1)
-		{
-			dd += weights[++x];
-		}
-	}
-	delete[] weights;
-}
-
-void LargeVis::visualize_thread(int id)
-{
-	long long edge_count = 0, last_edge_count = 0;
-	long long x, y, p, lx, ly, i, j;
-	real f, g, gg, cur_alpha = initial_alpha;
-	real *cur = new real[out_dim];
-	real *err = new real[out_dim];
-	real grad_clip = 5.0;
-	while (1)
-	{
-		if (edge_count > n_samples / n_threads + 2) break;
-		if (edge_count - last_edge_count > 10000)
-		{
-			edge_count_actual += edge_count - last_edge_count;
-			last_edge_count = edge_count;
-			cur_alpha = initial_alpha * (1 - edge_count_actual / (n_samples + 1.0));
-			if (cur_alpha < initial_alpha * 0.0001) cur_alpha = initial_alpha * 0.0001;
-			printf("LargeVis: %cFitting model\tAlpha: %f Progress: %.3lf%%\n", 13, cur_alpha, (real)edge_count_actual / (real)(n_samples + 1) * 100);
-		}
-		p = sample_an_edge(gsl_rng_uniform(gsl_r), gsl_rng_uniform(gsl_r));
-		x = edge_from[p];
-		y = edge_to[p];
-		lx = x * out_dim;
-		for (i = 0; i < out_dim; ++i) cur[i] = vis[lx + i], err[i] = 0;
-		for (i = 0; i < n_negatives + 1; ++i)
-		{
-			if (i > 0)
-			{
-				y = neg_table[(unsigned long long)floor(gsl_rng_uniform(gsl_r) * (neg_size - 0.1))];
-				if (y == edge_to[p]) continue;
-			}
-			ly = y * out_dim;
-			for (j = 0, f= 0; j < out_dim; ++j) f += (cur[j] - vis[ly + j]) * (cur[j] - vis[ly + j]);
-			if (i == 0) g = -2 / (1 + f);
-			else g = 2 * gamma / (1 + f) / (0.1 + f);
-			for (j = 0; j < out_dim; ++j)
-			{
-				gg = g * (cur[j] - vis[ly + j]);
-				if (gg > grad_clip) gg = grad_clip;
-				if (gg < -grad_clip) gg = -grad_clip;
-				err[j] += gg * cur_alpha;
-			
-				gg = g * (vis[ly + j] - cur[j]);
-				if (gg > grad_clip) gg = grad_clip;
-				if (gg < -grad_clip) gg = -grad_clip;
-				vis[ly + j] += gg * cur_alpha;
-			}
-		}
-		for (int j = 0; j < out_dim; ++j) vis[lx + j] += err[j];
-		++edge_count;
-	}
-	delete[] cur;
-	delete[] err;
-}
-
-void *LargeVis::visualize_thread_caller(void *arg)
-{
-	LargeVis *ptr = (LargeVis*)(((arg_struct*)arg)->ptr);
-	ptr->visualize_thread(((arg_struct*)arg)->id);
-	pthread_exit(NULL);
-}
-
-void LargeVis::visualize()
-{
-	long long i;
-	vis = new real[n_vertices * out_dim];
-	for (i = 0; i < n_vertices * out_dim; ++i) vis[i] = (gsl_rng_uniform(gsl_r) - 0.5) / out_dim * 0.0001;
-	init_neg_table();
-	init_alias_table();
-	edge_count_actual = 0;
-	pthread_t *pt = new pthread_t[n_threads];
-	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::visualize_thread_caller, new arg_struct(this, j));
-	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
-	delete[] pt;
-	printf("LargeVis: \n");
+	printf("LargeVis: Normalize&RPTrees real time: %.2lf seconds!\n", real_time[0]);
+	printf("LargeVis: Normalize&RPTrees clock time: %.2lf secs.\n", cpu_time[0]);
+	printf("LargeVis: KNN to P real time: %.2lf seconds!\n", real_time[1]);
+	printf("LargeVis: KNN to P clock time: %.2lf secs.\n", cpu_time[1]);
+	printf("LargeVis: Construct_knn total real time: %.2lf seconds!\n", real_time[0] + real_time[1]);
+	printf("LargeVis: Construct_knn total clock time: %.2lf secs.\n", cpu_time[0] + cpu_time[1]);
 }
 
 void LargeVis::get_result(unsigned long long** row_P, unsigned long long** col_P, double** val_P)
@@ -791,7 +639,6 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	}
 	out_dim = out_d < 0 ? 2 : out_d;
 	initial_alpha = alph < 0 ? 1.0 : alph;
-	//n_threads = n_thre < 0 ? 8 : n_thre;
 	n_threads = n_thre < 0 ? 1 : n_thre;
 	n_samples = n_samp;
 	n_negatives = n_nega < 0 ? 5 : n_nega;
@@ -822,17 +669,17 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	}
 	printf("LargeVis: Threads: %lld\n", n_threads);
 	if (vec) { clean_graph(); construt_knn(); }
-	//visualize();
 }
 
 void LargeVis::run_propagation_once(int i, bool knn_validation)
 {
-	printf("LargeVis: Running propagation %d\n", i + 1);
-	struct timespec start_p, end_p;
-
-	clock_gettime(CLOCK_MONOTONIC, &start_p);
 	int cnt = 0;
 
+	printf("LargeVis: Running propagation %d\n", i + 1);
+
+	sstart = clock();
+	clock_gettime(CLOCK_MONOTONIC, &sstart_p);
+	
 	old_knn_vec = knn_vec;
 	knn_vec = new std::vector<int>[n_vertices];
 	pthread_t *pt = new pthread_t[n_threads];
@@ -856,22 +703,53 @@ void LargeVis::run_propagation_once(int i, bool knn_validation)
 		}
 	}
 
-	printf("LargeVis: KNN Catch: %d\n", cnt);
-	clock_gettime(CLOCK_MONOTONIC, &end_p);
-	double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-	printf("LargeVis: Propagation %d: %.2f real seconds!\n", i + 1, elapsed);
+	eend = clock();
+	clock_gettime(CLOCK_MONOTONIC, &eend_p);
+
+	real_time[i*2+2] = (double)(eend_p.tv_sec - sstart_p.tv_sec) + (double)(eend_p.tv_nsec - sstart_p.tv_nsec)/BILLION;
+	ttt = eend - sstart;
+	cpu_time[i*2+2] = (double)ttt / CLOCKS_PER_SEC;
+
+	printf("LargeVis: Running propagation %d Done\n", i + 1);
+	printf("LargeVis: KNN which will be skipped in propagation %d: %d\n", i+2, cnt);
+
+	//TODO: Calculate and export compared data of old_knn_vec and knn_vec
+	//to use it in sgd approximation
 
 	delete[] old_knn_vec;
 	old_knn_vec = NULL;
 	test_accuracy();
-	clock_gettime(CLOCK_MONOTONIC, &start_p);
-
 	clean_graph();
+
+	sstart = clock();
+	clock_gettime(CLOCK_MONOTONIC, &sstart_p);
+
 	compute_similarity();
 
-	clock_gettime(CLOCK_MONOTONIC, &end_p);
-	elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-	printf("LargeVis: Similarity %d: %.2f real seconds!\n", i + 1, elapsed);
+	eend = clock();
+	clock_gettime(CLOCK_MONOTONIC, &eend_p);
 
-	//TODO need to free memory of knn_not_changed, vec, knn_vec when last result is read;
+	real_time[i*2+3] = (double)(eend_p.tv_sec - sstart_p.tv_sec) + (double)(eend_p.tv_nsec - sstart_p.tv_nsec)/BILLION;
+	ttt = eend - sstart;
+	cpu_time[i*2+3] = (double)ttt / CLOCKS_PER_SEC;
+
+	printf("LargeVis: Propagation %d: %.2lf real seconds!\n", i + 1, real_time[i*2+2]);
+	printf("LargeVis: Propagation %d: %.2lf clock seconds!\n", i + 1, cpu_time[i*2+2]);
+	printf("LargeVis: Calculate P for propagation %d: %.2lf real seconds!\n", i + 1, real_time[i*2+3]);
+	printf("LargeVis: Calculate P for propagation %d: %.2lf clock seconds!\n", i + 1, cpu_time[i*2+3]);
+	//FIXME: This should be ignored when pipelining is disabled.
+	printf("LargeVis: Propagation %d total: %.2lf real seconds!\n", i + 1, real_time[i*2+2] + real_time[i*2+3]);
+	printf("LargeVis: Propagation %d total: %.2lf clock seconds!\n", i + 1, cpu_time[i*2+2] + cpu_time[i*2+3]);
+
+	//TODO: need to free memory of knn_not_changed, vec, knn_vec when last result is read;
+}
+
+double* LargeVis::get_real_time()
+{
+	return real_time;
+}
+
+double* LargeVis::get_clock_time()
+{
+	return cpu_time;
 }

@@ -14,14 +14,19 @@ static inline double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.
 class PixelSNE
 {
 private:
-	struct timespec start_p2, end_p2;
-    struct timespec start_p3, end_p3;
+	struct timespec start_p, end_p;
+    struct timespec start_p2, end_p2;
     bool exact;
+    bool isVptree;
     PTree* tree;
-    float total_time;
-    double total_time2;
-    double total_time3;
+    double fitting_cpu_time;
+    double fitting_real_time;
+    double init_real_time;
+    double init_cpu_time;
     clock_t start, end;
+    clock_t start2, end2;
+    clock_t tt;
+    clock_t tt2;
     double momentum, final_momentum;
     double eta;
     double* dY;

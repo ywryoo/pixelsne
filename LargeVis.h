@@ -59,14 +59,21 @@ private:
 	static const gsl_rng_type * gsl_T;
 	static gsl_rng * gsl_r;
 	bool *knn_not_changed;
+	double real_time[50] = {0};
+	double cpu_time[50] = {0};
+	//0: normalize + rptrees(annoy), 1: knn->P for 0
+	//0 + 1: init time
+	//2: propagation 1, 3: knn->P for 2
+	//2 + 3: propagation 1 + calculate P time
+	//4: 5: ... so on
+	struct timespec sstart_p, eend_p;
+	clock_t ttt;
 
 	void clean_model();
 	void clean_data();
 	void clean_graph();
 	void normalize();
 	real CalcDist(long long x, long long y);
-	void init_alias_table();
-	long long sample_an_edge(real rand_value1, real rand_value2);
 	void run_annoy();
 	void annoy_thread(int id);
 	static void *annoy_thread_caller(void *arg);
@@ -80,10 +87,7 @@ private:
 	void search_reverse_thread(int id);
 	static void *search_reverse_thread_caller(void *arg);
 	void construt_knn();
-	void init_neg_table();
-	void visualize_thread(int id);
-	static void *visualize_thread_caller(void *arg);
-	void visualize();
+
 public:
 	LargeVis();
 	void load_from_file(char *infile);
@@ -97,6 +101,8 @@ public:
 	long long get_out_dim();
 	void get_result(unsigned long long** row_P, unsigned long long** col_P, double** val_P);
 	void run_propagation_once(int i, bool knn_validation);
+	double* get_real_time();
+	double* get_clock_time();
 };
 
 #endif

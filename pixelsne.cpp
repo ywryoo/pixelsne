@@ -21,7 +21,7 @@ using namespace std;
 #define BILLION 1000000000L
 
 long long num_insert = 0;
-
+clock_t start, end;
 
 /*Op*/
 #define EXP_LUT_RANGE 10
@@ -37,6 +37,9 @@ double fexp(double num)
 
 PixelSNE::PixelSNE() {
     KNNupdated = false;
+    fitting_real_time = 0;
+    fitting_cpu_time = 0;
+    isVptree = false;
 }
 
 PixelSNE::~PixelSNE() {
@@ -65,9 +68,6 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     if(N - 1 < 3 * perplexity) { printf("PixelSNE: Perplexity too large for the number of data points!\n"); exit(1); }
     printf("PixelSNE: Using no_dims = %d, perplexity = %f, bins = %d, p_method = %d and theta = %f\n", no_dims, perplexity, bins, p_method, theta);
     exact = (theta == .0) ? true : false;
-
-    // Set learning parameters
-    total_time = .0;
     
 	momentum = .5;
     final_momentum = .8;
@@ -98,9 +98,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     }
 
     else {  
-
-        struct timespec start_p, end_p;
-
+        start = clock();
         clock_gettime(CLOCK_MONOTONIC, &start_p);
 
         // Using LargeVis
@@ -162,11 +160,18 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
             for(int i = 0; i < row_P[N]; i++) {
                 val_P[i] /= sum_P;
             }
+            isVptree = true;
         }
 
+        end = clock();
         clock_gettime(CLOCK_MONOTONIC, &end_p);
-        double elapsed  = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
-        printf("PixelSNE: P training real time: %.2lf seconds!\n", elapsed);
+
+        tt = end - start;
+        init_real_time = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
+        init_cpu_time = (double)tt / CLOCKS_PER_SEC;
+
+        printf("PixelSNE: P training(valid for VPTree, P normalization included) real time: %.2lf seconds!\n", init_real_time);
+        printf("PixelSNE: P training(valid for VPTree, P normalization included) clock time: %.2lf seconds!\n", init_cpu_time);
     }
     end = clock();
     clock_gettime(CLOCK_MONOTONIC, &end_p2);
@@ -182,42 +187,20 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
         }
     }
 
-    double elapsed2  = (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION;
-    printf("PixelSNE: Input similarities computed in %4.2lf real seconds!(P included)\n", elapsed2);
-    total_time3 = total_time2 = elapsed2;
-
 	// Perform main training loop
-    if(exact) printf("PixelSNE: Input similarities computed in %4.2f clock seconds!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
-    else printf("PixelSNE: Input similarities computed in %4.2f clock seconds (sparsity = %f)!\nPixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC, (double) row_P[N] / ((double) N * (double) N));
+    if(exact) printf("PixelSNE: Learning embedding...\n", (float) (end - start) / CLOCKS_PER_SEC);
+    else printf("PixelSNE: Input similarities sparsity = %lf!\nPixelSNE: Learning embedding...\n", (double) row_P[N] / ((double) N * (double) N));
 
+    //init for updatePoints;
     beta = bins * bins * 1e3;
     tree = NULL;
-	/*
-	for(int iter = 0; iter < max_iter; iter++) {
-        updatePoints(Y, N, no_dims, theta, bins, iter, stop_lying_iter, mom_switch_iter, max_iter);
-    }
-
-    end = clock(); 
-    total_time += (float) (end - start) / CLOCKS_PER_SEC;
-
-    // Clean up memory
-    free(dY);
-    free(uY);
-    free(gains);
-    if(exact) free(P);
-    else {
-        free(row_P); row_P = NULL;
-        free(col_P); col_P = NULL;
-        free(val_P); val_P = NULL;
-    }
-    printf("PixelSNE: Fitting performed in %4.2f seconds.\n", total_time);*/
 }
 
 int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     if(iter == 0)
     {
         start = clock();
-        clock_gettime(CLOCK_MONOTONIC, &start_p3);
+        clock_gettime(CLOCK_MONOTONIC, &start_p);
     }
     
     if(KNNupdated)
@@ -233,6 +216,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
             else {      for(int i = 0; i < row_P[tempN]; i++) val_P[i] *= 12.0; }
         }
         KNNupdated = false;
+        printf("PixelSNE: KNN Updated when iter is %d!\n", iter+1);
     }
     if(exact) computeExactGradient(P, Y, N, no_dims, dY);
     else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
@@ -257,23 +241,28 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
 
     // Print out progress
     if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+        double temptime1, temptime2;
         end = clock();
+        clock_gettime(CLOCK_MONOTONIC, &end_p);
+
+        temptime1 = (double)(end_p.tv_sec - start_p.tv_sec) + (double)(end_p.tv_nsec - start_p.tv_nsec)/BILLION;
+        tt = end - start;
+        temptime2 = (double)tt / CLOCKS_PER_SEC;
+
         double C = .0;
         if(exact) C = evaluateError(P, Y, N, no_dims);
         else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
         if(iter == 0)
             printf("PixelSNE: Iteration %d: error is %f\n", iter + 1, C);
         else {
-            total_time += (float) (end - start) / CLOCKS_PER_SEC;
-            printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
+            fitting_real_time += temptime1;
+            fitting_cpu_time += temptime2;
+            printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2lf real seconds, %4.2lf clock seconds)\n", iter, C, temptime1, temptime2);
+            start = clock();
+            clock_gettime(CLOCK_MONOTONIC, &start_p);
         }
-        start = clock();
     }
     if (iter == max_iter -1) {
-        clock_gettime(CLOCK_MONOTONIC, &end_p3);
-        end = clock(); 
-        total_time += (float) (end - start) / CLOCKS_PER_SEC;
-
         // Clean up memory
         free(dY); dY = NULL;
         free(uY); uY = NULL;
@@ -287,17 +276,43 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
             free(col_P); col_P = NULL;
             free(val_P); val_P = NULL;
         }
-        printf("PixelSNE: Fitting performed in %4.2f clock seconds.\n", total_time);
-        double elapsed3  = (double)(end_p3.tv_sec - start_p3.tv_sec) + (double)(end_p3.tv_nsec - start_p3.tv_nsec)/BILLION;
-        printf("PixelSNE: Initialization: %.2lf real seconds\n", total_time2);
-        printf("PixelSNE: Initialization with propagation: %.2lf real seconds\n", total_time3);
-        printf("PixelSNE: Fitting performed in %4.2f real seconds!\n", elapsed3);
-        total_time2 += elapsed3;
-        printf("PixelSNE: Total real time: %.2lfs\n", total_time2);
-        total_time3 += elapsed3;
-        printf("PixelSNE: Propagation included Total real time: %.2lfs(total for not pipelined case)\n", total_time3);
+        
+        double propagation_real_time = 0;
+        double propagation_clock_time = 0;
+
+        if (!isVptree)
+        {
+            double* largeVisRealTime = p_model->get_real_time();
+            double* largeVisClockTime = p_model->get_clock_time();
+            init_real_time = largeVisRealTime[0] + largeVisRealTime[1];
+            init_cpu_time = largeVisClockTime[0] + largeVisClockTime[1];
+            int i = 2;
+            while(largeVisRealTime[i] != 0)
+            {
+                propagation_real_time += largeVisRealTime[i];
+                i++;
+            }
+            i = 2;
+            while(largeVisClockTime[i] != 0)
+            {
+                propagation_clock_time += largeVisClockTime[i];
+                i++;
+            }
+        }
+
+        printf("PixelSNE: Initialization: %.2lf real seconds\n", init_real_time);
+        printf("PixelSNE: Initialization: %.2lf clock seconds\n", init_cpu_time);
+        printf("PixelSNE: Initialization with propagation: %.2lf real seconds\n", init_real_time+propagation_real_time);
+        printf("PixelSNE: Initialization with propagation: %.2lf clock seconds\n", init_cpu_time+propagation_clock_time);
+        printf("PixelSNE: Fitting performed in %4.2f real seconds.\n", fitting_real_time);
+        printf("PixelSNE: Fitting performed in %4.2f clock seconds!\n", fitting_cpu_time);
+        printf("PixelSNE: Total real time: %.2lfs\n", init_real_time + fitting_real_time);
+        printf("PixelSNE: Total clock time: %.2lfs\n", init_cpu_time + fitting_cpu_time);
+        printf("PixelSNE: Total with propagation real time: %.2lfs\n", init_real_time+propagation_real_time + fitting_real_time);
+        printf("PixelSNE: Total with propagation clock time: %.2lfs\n", init_cpu_time+propagation_clock_time + fitting_cpu_time);
     }
     return iter+1;
+    //this value is ignored.
 }
 
 void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
@@ -937,9 +952,10 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 
 void PixelSNE::updateKNN(int i)
 {
+    start2 = clock();
     clock_gettime(CLOCK_MONOTONIC, &start_p2);
-    p_model->run_propagation_once(i, knn_validation);
-    
+
+    p_model->run_propagation_once(i, knn_validation); 
 	p_model->get_result(&new_row_P, &new_col_P, &new_val_P);
 	double sum_P = .0;
 	for(int i = 0; i < new_row_P[tempN]; i++) {
@@ -949,8 +965,12 @@ void PixelSNE::updateKNN(int i)
 		new_val_P[i] /= sum_P;
 	}
 
-    clock_gettime(CLOCK_MONOTONIC, &end_p2);
-    total_time3 += (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION;
+	end2 = clock();
+	clock_gettime(CLOCK_MONOTONIC, &end_p2);
+	tt2 = end2 - start2;
+
+	printf("PixelSNE: Updating KNN(including P normalization) %d: %.2lf real seconds!\n", i + 1, (double)(end_p2.tv_sec - start_p2.tv_sec) + (double)(end_p2.tv_nsec - start_p2.tv_nsec)/BILLION);
+	printf("PixelSNE: Updating KNN(including P normalization) %d: %.2lf clock seconds!\n", i + 1, (double)tt2 / CLOCKS_PER_SEC);
 
     KNNupdated = true;
 }
