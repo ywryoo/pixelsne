@@ -22,6 +22,8 @@ using namespace std;
 
 long long num_insert = 0;
 
+int skip[200000];
+
 /*Op*/
 #define EXP_LUT_RANGE 10
 #define EXP_LUT_DIV 1000
@@ -221,8 +223,31 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
 
     // Perform gradient update (with momentum and gains)
-    for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-    for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
+    for(int i = 0; i < N * no_dims; i++) {
+        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]||skip[i/no_dims]==0)
+            uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+        if((i%no_dims)==0&&iter>400){
+            if(skip[i/no_dims]>0) skip[i/no_dims]--;
+            if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//have to be checked
+                if(-0.0005<=uY[i]&&uY[i]<=0.0005){
+                    if(skip[i/no_dims]==0) skip[i/no_dims]=3;
+                    else if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
+                        skip[i/no_dims]*=4;
+                        skip[i/no_dims]--;
+                    }
+                }
+                else {
+                    printf("Free~!\n");
+                    skip[i/no_dims]=1;
+                }
+            }
+        }
+    }
+    for(int i = 0; i < N * no_dims; i++) 
+    {
+        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]||skip[i/no_dims]==0)
+            Y[i] = Y[i] + uY[i];
+    }
 
     beta = minmax(Y, N, no_dims, beta, bins, iter);
 
@@ -320,11 +345,21 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
         for(int i = 0; i < N*D; i++) pos_f[i]=0;
     }
     tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, beta);
-    for(int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
-
+    int cntt=0;
+    for(int n = 0; n < N; n++) {
+        if(((skip[n])&(-skip[n]))==skip[n]||skip[n]==0){
+            tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
+        }
+        else{
+            cntt++;
+        }
+    }
+    printf("skipped : %d\n",cntt);
     // Compute final t-SNE gradient
     for(int i = 0; i < N * D; i++) {
-        dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        else dC[i]=0;
     }
 
     enddd = clock();
