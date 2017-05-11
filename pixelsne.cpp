@@ -86,6 +86,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     gains = (double*) malloc(N * no_dims * sizeof(double));
     if(dY == NULL || uY == NULL || gains == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     for(int i = 0; i < N * no_dims; i++)    uY[i] =  .0;
+    for(int i = 0; i < N; i++)    uY[i] =  skip[i]=1;
     for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
     // Normalize input data (to prevent numerical problems)
@@ -224,20 +225,17 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
 
     // Perform gradient update (with momentum and gains)
     for(int i = 0; i < N * no_dims; i++) {
-        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]||skip[i/no_dims]==0)
+        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims])
             uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
         if((i%no_dims)==0&&iter>400){
-            if(skip[i/no_dims]>0) skip[i/no_dims]--;
             if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//have to be checked
-                if(-0.0005<=uY[i]&&uY[i]<=0.0005){
-                    if(skip[i/no_dims]==0) skip[i/no_dims]=3;
-                    else if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
+                if(-0.01<=uY[i]&&uY[i]<=0.01) {
+                    if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
                         skip[i/no_dims]*=4;
                         skip[i/no_dims]--;
                     }
                 }
                 else {
-                    printf("Free~!\n");
                     skip[i/no_dims]=1;
                 }
             }
@@ -347,6 +345,7 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
     tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, beta);
     int cntt=0;
     for(int n = 0; n < N; n++) {
+        if(skip[n]>1 ) skip[n]--;
         if(((skip[n])&(-skip[n]))==skip[n]||skip[n]==0){
             tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
         }
