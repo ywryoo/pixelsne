@@ -218,9 +218,9 @@ void *updateGradientThread(void *_id)
 
 	return NULL;
 }
-int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
-    isSleeping = sleeping;
-    if(sleeping && skip == NULL)
+int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleepingg, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+    isSleeping = sleepingg;
+    if(sleepingg && skip == NULL)
     {
         skip = (int *) malloc(N * sizeof(int));
         for(int i = 0; i < N; i++)    skip[i]=1;
@@ -280,16 +280,16 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
 
         // Update gains
         for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-
+    }
     // Perform gradient update (with momentum and gains)
-    if(sleeping)
+    if(sleepingg)
     {
         for(int i = 0; i < N * no_dims; i++) {
             if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims])
                 uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
             if((i%no_dims)==0&&iter>stop_lying_iter_num+150){
                 if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//have to be checked
-                    if(-0.05<=uY[i]&&uY[i]<=0.05) {
+                    if(-0.01<=uY[i]&&uY[i]<=0.01) {
                         if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
                             skip[i/no_dims]*=4;
                             skip[i/no_dims]--;
@@ -310,12 +310,13 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     else
     {
         for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
-    }
-
-        // Perform gradient update (with momentum and gains)
+                // Perform gradient update (with momentum and gains)
         for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
         for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
+    
     }
+
+
     beta = minmax(Y, N, no_dims, beta, bins, iter);
 
     // Stop lying about the P-values after a while, and switch momentum
