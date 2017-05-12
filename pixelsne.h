@@ -18,6 +18,7 @@ private:
     struct timespec start_p2, end_p2;
     bool exact;
     bool isLogging;
+    bool isSleeping;
     PTree* tree;
     clock_t start, end;
     clock_t start2, end2;
@@ -48,6 +49,8 @@ private:
     int max_iteration;
     int n_propagations;
     int n_threads;
+    int *skip;
+    int stop_lying_iter_num;
 public:
     double fitting_cpu_time;
     double fitting_real_time;

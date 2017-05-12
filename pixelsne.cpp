@@ -38,7 +38,8 @@ double *global2_negf, *global2_theta, *global2_beta, *global2_sumq;
 int *global2_iter_cnt, *global2_N, *global2_D;
 double *global2_gains, *global2_dY, *global2_uY, *global2_Y;
 double *global2_eta, *global2_momentum;
-int *global2_no_dims;
+int *global2_no_dims, *global2_skip_cnt, *global2_skip;
+bool globalIsSleeping;
 int num_threads = 4;
 PTree *ptree;
 PTree *gradientTree;
@@ -50,15 +51,19 @@ PixelSNE::PixelSNE() {
     propagation_cpu_time = 0;
     propagation_real_time = 0;
     isLogging = false;
+    isSleeping = false;
     temptime1=0;
     temptime2=0;
     init_real_time=0;
     init_cpu_time=0;
     n_threads = 4;
+    skip = NULL;
+    stop_lying_iter_num = 250;
 }
 
 PixelSNE::~PixelSNE() {
     if (tree != NULL) delete tree;
+    if (skip != NULL) free(skip); skip = NULL;
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
@@ -69,6 +74,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     n_propagations = propagation_num;
     n_threads = nthreads;
     num_threads = nthreads;
+    stop_lying_iter_num = stop_lying_iter;
                 tempN = N;
     // Set random seed
     if (skip_random_init != true) {
@@ -96,6 +102,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     gains = (double*) malloc(N * no_dims * sizeof(double));
     if(dY == NULL || uY == NULL || gains == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
     for(int i = 0; i < N * no_dims; i++)    uY[i] =  .0;
+
     for(int i = 0; i < N * no_dims; i++) gains[i] = 1.0;
 
     // Normalize input data (to prevent numerical problems)
@@ -212,16 +219,19 @@ void *updateGradientThread(void *_id)
 	return NULL;
 }
 int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+    isSleeping = sleeping;
+    if(sleeping && skip == NULL)
+    {
+        skip = (int *) malloc(N * sizeof(int));
+        for(int i = 0; i < N; i++)    skip[i]=1;
+    }
     
     if(iter == 0)
     {
         start = clock();
         clock_gettime(CLOCK_MONOTONIC, &start_p);   
     }
-    //temp code
-    if(sleeping){printf("Sleeping\n");}
-    if(threading){printf("Threading\n");}
-    
+
     if(KNNupdated)
     {
         free(row_P);
@@ -271,7 +281,36 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         // Update gains
         for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
 
+    // Perform gradient update (with momentum and gains)
+    if(sleeping)
+    {
+        for(int i = 0; i < N * no_dims; i++) {
+            if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims])
+                uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+            if((i%no_dims)==0&&iter>stop_lying_iter_num+150){
+                if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//have to be checked
+                    if(-0.05<=uY[i]&&uY[i]<=0.05) {
+                        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
+                            skip[i/no_dims]*=4;
+                            skip[i/no_dims]--;
+                        }
+                    }
+                    else {
+                        skip[i/no_dims]=1;
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < N * no_dims; i++) 
+        {
+            if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]||skip[i/no_dims]==0)
+                Y[i] = Y[i] + uY[i];
+        }
+    }
+    else
+    {
         for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
+    }
 
         // Perform gradient update (with momentum and gains)
         for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
@@ -348,14 +387,26 @@ void *computeNonEdgeForcesThread(void *_id)
 	long long hi = (id + 1) * *global2_N / num_threads;
 
 	int i;
-//	double sum_Q;
 	global2_sumq[id] = 0;
+    global2_skip_cnt[id] = 0;
 	for (i = lo; i < hi; ++i)
 	{
-		gradientTree->computeNonEdgeForces(i, *global2_theta, global2_negf+ i * *global2_D, &global2_sumq[id], *global2_beta, *global2_iter_cnt);
-//		global2_sumq[id] += sum_Q;
-	}
+        if(globalIsSleeping)
+        {
+            if(global2_skip[i]>1 ) global2_skip[i]--;
+            if(((global2_skip[i])&(-global2_skip[i]))==global2_skip[i]||global2_skip[i]==0){
+        		gradientTree->computeNonEdgeForces(i, *global2_theta, global2_negf+ i * *global2_D, &global2_sumq[id], *global2_beta, *global2_iter_cnt);
+            }
+            else{
+                global2_skip_cnt[id]++;
+            }
 
+        }
+        else
+        {
+    		gradientTree->computeNonEdgeForces(i, *global2_theta, global2_negf+ i * *global2_D, &global2_sumq[id], *global2_beta, *global2_iter_cnt);
+        }
+	}
 	return NULL;
 }
 
@@ -397,6 +448,9 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
     global2_N = &N;
     global2_D = &D;
     global2_sumq = (double *) malloc(num_threads * sizeof(double));
+    global2_skip_cnt = (int *) malloc(num_threads * sizeof(int));
+    global2_skip = skip;
+    globalIsSleeping = isSleeping;
     gradientTree = tree;
 
 	boost::thread *pt = new boost::thread[num_threads];
@@ -406,12 +460,28 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
 	for (long long i = 0; i < num_threads; ++i)
 		sum_Q += global2_sumq[i];
 
+    if(isSleeping)
+    {
+        int cntt = 0;
+        for(int i = 0; i < num_threads; ++i) cntt += global2_skip_cnt[i];
+        if(cntt != 0) printf("PixelSNE: SGD Skipped : %d\n",cntt);
 
-    // Compute final t-SNE gradient
-    for(int i = 0; i < N * D; i++) {
-        dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        // Compute final t-SNE gradient
+        for(int i = 0; i < N * D; i++) {
+            if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+                dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+            else dC[i]=0;
+        }
     }
-
+    else
+    {
+        // Compute final t-SNE gradient 
+        for(int i = 0; i < N * D; i++) { 
+            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        }
+    }
+    free(global2_sumq); global2_sumq = NULL;
+    free(global2_skip_cnt); global2_skip_cnt = NULL;
 }
 
 void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
@@ -443,13 +513,35 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
         for(int i = 0; i < N*D; i++) pos_f[i]=0;
     }
     tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, beta);
-    for(int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
-
-    // Compute final t-SNE gradient
-    for(int i = 0; i < N * D; i++) {
-        dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+    
+    if(isSleeping)
+    {
+        int cntt=0;
+        for(int n = 0; n < N; n++) {
+            if(skip[n]>1 ) skip[n]--;
+            if(((skip[n])&(-skip[n]))==skip[n]||skip[n]==0){
+                tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
+            }
+            else{
+                cntt++;
+            }
+        }
+        if(cntt != 0) printf("PixelSNE: SGD Skipped : %d\n",cntt);
+        // Compute final t-SNE gradient
+        for(int i = 0; i < N * D; i++) {
+            if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+                dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+            else dC[i]=0;
+        }
     }
-
+    else
+    {
+        for(int n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt); 
+        // Compute final t-SNE gradient 
+        for(int i = 0; i < N * D; i++) { 
+            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        }
+    }
 }
 
 // Compute gradient of the t-SNE cost function (exact)
