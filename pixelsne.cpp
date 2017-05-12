@@ -59,6 +59,9 @@ PixelSNE::PixelSNE() {
     n_threads = 4;
     skip = NULL;
     stop_lying_iter_num = 250;
+    propDone = false;
+    originalThreads = 4;
+    isPipelined = false;
 }
 
 PixelSNE::~PixelSNE() {
@@ -67,15 +70,18 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, int max_iter, int stop_lying_iter, 
+               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, bool pipelined, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) {
     knn_validation = isValidation; 
     max_iteration = max_iter;
     n_propagations = propagation_num;
     n_threads = nthreads;
+    originalThreads = nthreads;
     num_threads = nthreads;
     stop_lying_iter_num = stop_lying_iter;
-                tempN = N;
+    tempN = N;
+    isPipelined = pipelined;
+    if(propagation_num == 0) propDone = true;
     // Set random seed
     if (skip_random_init != true) {
       if(rand_seed >= 0) {
@@ -151,6 +157,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
             double* largeVisClockTime = p_model->get_clock_time();
             init_real_time += (largeVisRealTime[0] + largeVisRealTime[1]);
             init_cpu_time += (largeVisClockTime[0] + largeVisClockTime[1]);
+            if(pipelined) p_model->setThreadsNum(threadNum-1);
         }
         else 
         {
@@ -218,14 +225,23 @@ void *updateGradientThread(void *_id)
 
 	return NULL;
 }
-int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleepingg, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool isthreaded, bool sleepingg, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     isSleeping = sleepingg;
+    bool threading = isthreaded;
     if(sleepingg && skip == NULL)
     {
         skip = (int *) malloc(N * sizeof(int));
         for(int i = 0; i < N; i++)    skip[i]=1;
     }
-    
+    if(!propDone && isPipelined)
+    {
+        threading = false;
+    }
+    else
+    {
+        n_threads = originalThreads;
+        num_threads = originalThreads;        
+    }
     if(iter == 0)
     {
         start = clock();
@@ -1233,6 +1249,7 @@ void PixelSNE::updateKNN(int i)
     propagation_real_time += temptime11;
 
     KNNupdated = true;
+    if(i == (n_propagations -1 )) propDone = true;
 }
 
 int PixelSNE::get_propagation_num()

@@ -103,6 +103,7 @@ public:
 	void run_propagation_once(int i, bool knn_validation);
 	double* get_real_time();
 	double* get_clock_time();
+	void setThreadsNum(long long i);
 };
 
 #endif

@@ -753,3 +753,8 @@ double* LargeVis::get_clock_time()
 {
 	return cpu_time;
 }
+
+void LargeVis::setThreadsNum(long long i)
+{
+	n_threads = i;
+}
