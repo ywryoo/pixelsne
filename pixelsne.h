@@ -64,7 +64,7 @@ public:
     void save_data(double* data, int* landmarks, double* costs, int n, int d);
     void save_data(const char* outfile, double* Y, int N, int D, double theta, unsigned int bins, int iter);
     void symmetrizeMatrix(unsigned long long** row_P, unsigned long long** col_P, double** val_P, int N); // should be static!
-    int updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter);
+    int updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter);
     void updateKNN(int i);
     int get_propagation_num();
     int get_max_iter();
