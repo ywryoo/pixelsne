@@ -182,7 +182,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     tree = NULL;
 }
 
-int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     
     if(iter == 0)
     {
@@ -191,6 +191,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     }
     //temp code
     if(sleeping){printf("Sleeping\n");}
+    if(threading){printf("Threading\n");}
     
     if(KNNupdated)
     {
