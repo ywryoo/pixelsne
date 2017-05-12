@@ -7,6 +7,17 @@
 #include <cmath>
 #include "ptree.h"
 
+#include <boost/thread.hpp>
+#include <boost/random.hpp>
+#include <boost/random/linear_congruential.hpp>
+#include <boost/random/uniform_int.hpp>
+#include <boost/random/uniform_real.hpp>
+#include <boost/random/variate_generator.hpp>
+
+long long global_N, global_num_threads, global_num_vertices, global_dimension;
+unsigned long long *global_row_P, *global_col_P;
+double *global_val_P, *global_data, *global_pos_f,global_beta, *global_buff;
+
 extern long long num_insert;
 
 // Constructs cell
@@ -373,6 +384,55 @@ void PTree::computeEdgeForces(unsigned long long* row_P, unsigned long long* col
         }
         ind1 += dimension;
     }
+}
+void *computeEdgeForcesThread(void *_id)
+{
+	long long id = (long long)_id;
+	long long lo = id * global_num_vertices / global_num_threads;
+	long long hi = (id + 1) * global_num_vertices / global_num_threads;
+
+	// Loop over all edges in the graph
+	unsigned long long ind1 = lo * global_dimension;
+	unsigned long long ind2 = 0;
+	double D;
+	for (unsigned long long n = lo; n < hi; n++) {
+		for (unsigned long long i = global_row_P[n]; i < global_row_P[n + 1]; i++) {
+
+			// Compute pairwise distance and Q-value
+			D = global_beta;
+			ind2 = global_col_P[i] * global_dimension;
+            for(unsigned int d = 0; d < global_dimension; d++) global_buff[d] = global_data[ind1 + d] - global_data[ind2 + d];
+            for(unsigned int d = 0; d < global_dimension; d++) D += global_buff[d] * global_buff[d];
+			D = global_val_P[i] * global_beta / D;
+
+			// Sum positive force
+            for(unsigned int d = 0; d < global_dimension; d++) global_pos_f[ind1 + d] += D * global_buff[d];
+		}
+		ind1 += global_dimension;
+	}
+
+	return NULL;
+}
+
+// Computes edge forces with Thread
+void PTree::computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f,  double beta, int num_threads)
+{
+	global_N = N;
+	global_num_threads = num_threads;
+	global_num_vertices = N;
+	global_dimension = dimension;
+	global_row_P = row_P;
+	global_col_P = col_P;
+	global_val_P = val_P;
+	global_data = data;
+	global_pos_f = pos_f;
+    global_beta = beta;
+    global_buff = buff;
+
+	boost::thread *pt = new boost::thread[num_threads];
+	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(computeEdgeForcesThread, (void*)i);
+	for (long long i = 0; i < num_threads; ++i) pt[i].join();
+	delete[] pt;
 }
 
 // Print out tree

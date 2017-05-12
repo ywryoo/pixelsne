@@ -76,6 +76,7 @@ public:
     unsigned int getDepth();
     void computeNonEdgeForces(unsigned int point_index, double theta, double neg_f[], double* sum_Q, double beta, int iter_cnt);
     void computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f, double beta);
+    void computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f, double beta,int num_threads);
     void print();
     void fill(unsigned int N, int iter_cnt);
 

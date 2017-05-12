@@ -45,6 +45,7 @@ PixelSNE::PixelSNE() {
     temptime2=0;
     init_real_time=0;
     init_cpu_time=0;
+    n_threads = 4;
 }
 
 PixelSNE::~PixelSNE() {
@@ -52,11 +53,12 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, int max_iter, int stop_lying_iter, 
+               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) {
     knn_validation = isValidation; 
     max_iteration = max_iter;
     n_propagations = propagation_num;
+    n_threads = nthreads;
                 tempN = N;
     // Set random seed
     if (skip_random_init != true) {
@@ -109,7 +111,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
             printf("PixelSNE: P Method: Construct_KNN\n");
 
             long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1;
-            long long threadNum = n_threads;
+            long long threadNum = nthreads;
             real alpha = -1, n_gamma = -1;
 
             p_model = new LargeVis();

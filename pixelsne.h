@@ -47,6 +47,7 @@ private:
     bool knn_validation;
     int max_iteration;
     int n_propagations;
+    int n_threads;
 public:
     double fitting_cpu_time;
     double fitting_real_time;
