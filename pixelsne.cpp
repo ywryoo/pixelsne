@@ -421,6 +421,24 @@ double PixelSNE::evaluateError(double* P, double* Y, int N, int D) {
 	return C;
 }
 
+void *computeNonEdgeForcesThread(void *_id)
+{
+	long long id = (long long)_id;
+	long long lo = id * num_vertices / num_threads;
+	long long hi = (id + 1) * num_vertices / num_threads;
+
+	long long i;
+//	double sum_Q;
+	global_sumq[id] = 0;
+	for (i = lo; i < hi; ++i)
+	{
+		tree->computeNonEdgeForces(i, global_theta, global_negf + i * vector_dim, &global_sumq[id], &buff[id * vector_dim]);
+//		global_sumq[id] += sum_Q;
+	}
+
+	return NULL;
+}
+
 // Evaluate t-SNE cost function (approximately)
 double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta, double beta, unsigned int bins, int iter_cnt)
 {
@@ -430,6 +448,17 @@ double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* co
     double* buff = (double*) calloc(D, sizeof(double));
     double sum_Q = .0;
     for(int n = 0; n < N; n++) dtree->computeNonEdgeForces(n, theta, buff, &sum_Q, beta, iter_cnt);
+
+    double* buff = (double*) calloc(D * N, sizeof(double));
+    double sum_Q = .0;
+
+	global_negf = buff;
+	boost::thread *pt = new boost::thread[num_threads];
+	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(computeNonEdgeForcesThread, (void*)i);
+	for (long long i = 0; i < num_threads; ++i) pt[i].join();
+	delete[] pt;
+	for (long long i = 0; i < num_threads; ++i)
+		sum_Q += global_sumq[i];
 
     // Loop over all edges to compute t-SNE error
     int ind1, ind2;
