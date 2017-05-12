@@ -15,6 +15,7 @@
 #include "ptree.h"
 #include "LargeVis.h"
 
+#include <boost/thread.hpp>
 using namespace std;
 
 
@@ -33,6 +34,14 @@ double fexp(double num)
 	if (num >= EXP_LUT_RANGE)return pexp[EXP_LUT_DIV - 1];
 	return pexp[(int)((num + EXP_LUT_RANGE)*EXP_LUT_DIV / EXP_LUT_RANGE / 2)];
 }
+double *global2_negf, *global2_theta, *global2_beta, *global2_sumq;
+int *global2_iter_cnt, *global2_N, *global2_D;
+double *global2_gains, *global2_dY, *global2_uY, *global2_Y;
+double *global2_eta, *global2_momentum;
+int *global2_no_dims;
+int num_threads = 4;
+PTree *ptree;
+PTree *gradientTree;
 
 PixelSNE::PixelSNE() {
     KNNupdated = false;
@@ -59,6 +68,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     max_iteration = max_iter;
     n_propagations = propagation_num;
     n_threads = nthreads;
+    num_threads = nthreads;
                 tempN = N;
     // Set random seed
     if (skip_random_init != true) {
@@ -112,7 +122,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 
             long long if_embed = 1, out_dim = -1, n_samples = -1, n_negative = -1, n_neighbors = -1;
             long long threadNum = nthreads;
-            real alpha = -1, n_gamma = -1;
+            float alpha = -1, n_gamma = -1;
 
             p_model = new LargeVis();
             p_model->load_from_data(X, N, D);
@@ -183,7 +193,24 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     beta = bins * bins * 1e3;
     tree = NULL;
 }
+void *updateGradientThread(void *_id)
+{
+	long long id = (long long)_id;
+	long long lo = id * *global2_N / num_threads;
+	long long hi = (id + 1) * *global2_N / num_threads;
+//	printf("%lld %lld %lld\n", id, lo, hi);
+	for (long long i = lo * *global2_no_dims; i < hi * *global2_no_dims; ++i)
+	{
+		//update gains
+		global2_gains[i] = (sign(global2_dY[i]) != sign(global2_uY[i])) ? (global2_gains[i] + .2) : (global2_gains[i] * .8);
+		if (global2_gains[i] < .01) global2_gains[i] = .01;
+		//update gradient
+		global2_uY[i] = *global2_momentum * global2_uY[i] - *global2_eta * global2_gains[i] * global2_dY[i];
+		global2_Y[i] = global2_Y[i] + global2_uY[i];
+	}
 
+	return NULL;
+}
 int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool threading, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     
     if(iter == 0)
@@ -217,18 +244,39 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         KNNupdated = false;
         printf("PixelSNE: KNN Updated when iter is %d!\n", iter+1);
     }
-    if(exact) computeExactGradient(P, Y, N, no_dims, dY);
-    else computeGradient(P, row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
+    if(threading)
+    {
+        computeGradient(row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter, n_threads);
+        
+        global2_N = &N;
+        global2_no_dims = &no_dims;
+        global2_gains = gains;
+        global2_dY = dY;
+        global2_uY = uY;
+        global2_momentum = &momentum;
+        global2_eta = &eta;
+        global2_Y = Y;
+        
+        boost::thread *pt = new boost::thread[num_threads];
+		for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(updateGradientThread, (void*)i);
+		for (long long i = 0; i < num_threads; ++i) pt[i].join();
+		delete[] pt;
 
-    // Update gains
-    for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+    }
+    else
+    {
+        if(exact) computeExactGradient(P, Y, N, no_dims, dY);
+        else computeGradient(row_P, col_P, val_P, Y, N, no_dims, dY, theta, beta, bins, iter);
 
-    for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
+        // Update gains
+        for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
 
-    // Perform gradient update (with momentum and gains)
-    for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-    for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
+        for(int i = 0; i < N * no_dims; i++) if(gains[i] < .01) gains[i] = .01;
 
+        // Perform gradient update (with momentum and gains)
+        for(int i = 0; i < N * no_dims; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+        for(int i = 0; i < N * no_dims; i++)  Y[i] = Y[i] + uY[i];
+    }
     beta = minmax(Y, N, no_dims, beta, bins, iter);
 
     // Stop lying about the P-values after a while, and switch momentum
@@ -237,6 +285,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
     }
     if(iter == mom_switch_iter) momentum = final_momentum;
+
 
     end = clock();
     clock_gettime(CLOCK_MONOTONIC, &end_p);
@@ -292,12 +341,29 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     //this value is ignored.
 }
 
-void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
-    double theta, double beta, unsigned int bins, int iter_cnt){ 
-    clock_t startss, enddd;
+void *computeNonEdgeForcesThread(void *_id)
+{
+	long long id = (long long)_id;
+	long long lo = id * *global2_N / num_threads;
+	long long hi = (id + 1) * *global2_N / num_threads;
+
+	int i;
+//	double sum_Q;
+	global2_sumq[id] = 0;
+	for (i = lo; i < hi; ++i)
+	{
+		gradientTree->computeNonEdgeForces(i, *global2_theta, global2_negf+ i * *global2_D, &global2_sumq[id], *global2_beta, *global2_iter_cnt);
+//		global2_sumq[id] += sum_Q;
+	}
+
+	return NULL;
+}
+
+//multithread;
+void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
+    double theta, double beta, unsigned int bins, int iter_cnt, int nthreads){ 
 
     // Construct space-partitioning tree on current map
-    startss = clock();
     if (tree == NULL){
         tree = new PTree(D, Y, N, bins, 0, iter_cnt);
         //tree->print();
@@ -307,10 +373,62 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
         tree->clean(iter_cnt);
         tree->fill(N, iter_cnt);
     }
-    enddd = clock();
 
     // Compute all terms required for t-SNE gradient
-    startss = clock();
+    double sum_Q = .0;
+
+    if(pos_f == NULL && neg_f == NULL)
+    {
+        pos_f = (double*) calloc(N * D, sizeof(double));
+        neg_f = (double*) calloc(N * D, sizeof(double));
+        if(pos_f == NULL || neg_f == NULL) { printf("PixelSNE: Memory allocation failed!\n"); exit(1); }
+    }
+    else
+    {
+        for(int i = 0; i < N*D; i++) neg_f[i]=0;
+        for(int i = 0; i < N*D; i++) pos_f[i]=0;
+    }
+    tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, beta, nthreads);
+
+    global2_negf = neg_f;
+    global2_theta = &theta;
+    global2_beta = &beta;
+    global2_iter_cnt = &iter_cnt;
+    global2_N = &N;
+    global2_D = &D;
+    global2_sumq = (double *) malloc(num_threads * sizeof(double));
+    gradientTree = tree;
+
+	boost::thread *pt = new boost::thread[num_threads];
+	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(computeNonEdgeForcesThread, (void*)i);
+	for (long long i = 0; i < num_threads; ++i) pt[i].join();
+	delete[] pt;
+	for (long long i = 0; i < num_threads; ++i)
+		sum_Q += global2_sumq[i];
+
+
+    // Compute final t-SNE gradient
+    for(int i = 0; i < N * D; i++) {
+        dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+    }
+
+}
+
+void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, 
+    double theta, double beta, unsigned int bins, int iter_cnt){ 
+
+    // Construct space-partitioning tree on current map
+    if (tree == NULL){
+        tree = new PTree(D, Y, N, bins, 0, iter_cnt);
+        //tree->print();
+        //printf("PixelSNE: num_insert: %lld\n", num_insert);
+    }
+    else {
+        tree->clean(iter_cnt);
+        tree->fill(N, iter_cnt);
+    }
+
+    // Compute all terms required for t-SNE gradient
     double sum_Q = .0;
 
     if(pos_f == NULL && neg_f == NULL)
@@ -332,7 +450,6 @@ void PixelSNE::computeGradient(double* P, unsigned long long* inp_row_P, unsigne
         dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
     }
 
-    enddd = clock();
 }
 
 // Compute gradient of the t-SNE cost function (exact)
@@ -421,19 +538,19 @@ double PixelSNE::evaluateError(double* P, double* Y, int N, int D) {
 	return C;
 }
 
-void *computeNonEdgeForcesThread(void *_id)
+void *computeNonEdgeForcesForErrorThread(void *_id)
 {
 	long long id = (long long)_id;
-	long long lo = id * num_vertices / num_threads;
-	long long hi = (id + 1) * num_vertices / num_threads;
+	long long lo = id * *global2_N / num_threads;
+	long long hi = (id + 1) * *global2_N / num_threads;
 
-	long long i;
+	int i;
 //	double sum_Q;
-	global_sumq[id] = 0;
+	global2_sumq[id] = 0;
 	for (i = lo; i < hi; ++i)
 	{
-		tree->computeNonEdgeForces(i, global_theta, global_negf + i * vector_dim, &global_sumq[id], &buff[id * vector_dim]);
-//		global_sumq[id] += sum_Q;
+		ptree->computeNonEdgeForces(i, *global2_theta, global2_negf, &global2_sumq[id], *global2_beta, *global2_iter_cnt);
+//		global2_sumq[id] += sum_Q;
 	}
 
 	return NULL;
@@ -444,21 +561,22 @@ double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* co
 {
 
     // Get estimate of normalization term
-    PTree* dtree = new PTree(D, Y, N, bins, 0, iter_cnt);
-    double* buff = (double*) calloc(D, sizeof(double));
-    double sum_Q = .0;
-    for(int n = 0; n < N; n++) dtree->computeNonEdgeForces(n, theta, buff, &sum_Q, beta, iter_cnt);
+    ptree = new PTree(D, Y, N, bins, 0, iter_cnt);
+    global2_negf = (double*) calloc(D, sizeof(double));
+    global2_theta = &theta;
+    global2_beta = &beta;
+    global2_iter_cnt = &iter_cnt;
+    global2_N = &N;
+    global2_sumq = (double *) malloc(num_threads * sizeof(double));
 
-    double* buff = (double*) calloc(D * N, sizeof(double));
     double sum_Q = .0;
 
-	global_negf = buff;
 	boost::thread *pt = new boost::thread[num_threads];
-	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(computeNonEdgeForcesThread, (void*)i);
+	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(computeNonEdgeForcesForErrorThread, (void*)i);
 	for (long long i = 0; i < num_threads; ++i) pt[i].join();
 	delete[] pt;
 	for (long long i = 0; i < num_threads; ++i)
-		sum_Q += global_sumq[i];
+		sum_Q += global2_sumq[i];
 
     // Loop over all edges to compute t-SNE error
     int ind1, ind2;
@@ -468,9 +586,9 @@ double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* co
         for(int i = row_P[n]; i < row_P[n + 1]; i++) {
             Q = .0;
             ind2 = col_P[i] * D;
-            for(int d = 0; d < D; d++) buff[d]  = Y[ind1 + d];
-            for(int d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
-            for(int d = 0; d < D; d++) Q += buff[d] * buff[d];
+            for(int d = 0; d < D; d++) global2_negf[d]  = Y[ind1 + d];
+            for(int d = 0; d < D; d++) global2_negf[d] -= Y[ind2 + d];
+            for(int d = 0; d < D; d++) Q += global2_negf[d] * global2_negf[d];
             Q = (beta / (beta + Q)) / sum_Q;
             C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
 
@@ -478,8 +596,9 @@ double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* co
     }
 
     // Clean up memory
-    free(buff);
-    delete dtree;
+    free(global2_negf);
+    free(global2_sumq);
+    delete ptree;
     return C;
 }
 
