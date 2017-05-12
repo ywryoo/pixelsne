@@ -182,13 +182,15 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     tree = NULL;
 }
 
-int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
+int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsigned int &bins, bool sleeping, int iter, int &stop_lying_iter, int &mom_switch_iter, int &max_iter) {
     
     if(iter == 0)
     {
         start = clock();
         clock_gettime(CLOCK_MONOTONIC, &start_p);   
     }
+    //temp code
+    if(sleeping){printf("Sleeping\n");}
     
     if(KNNupdated)
     {
@@ -198,13 +200,13 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         row_P = new_row_P;
         col_P = new_col_P;
         val_P = new_val_P;
-
+/*
         if(isLogging)
         {
             char buffer[50];
             sprintf(buffer, "P_iter_%d.log", iter+1);
             save_P(buffer);
-        }
+        }*/ //P is not needed
         if(iter <= stop_lying_iter) {
             if(exact) {  if(P != NULL) for(int i = 0; i < tempN * tempN; i++)        P[i] *= 12.0; }
             else {      for(int i = 0; i < row_P[tempN]; i++) val_P[i] *= 12.0; }
@@ -942,11 +944,11 @@ void PixelSNE::save_data(const char* outfile, double* Y, int N, int D, double th
     fwrite(&C, sizeof(double), 1, h);
 
     fclose(h);
-    if(!isLogging)
+/*    if(!isLogging)
     {
         strcpy(tempname, "P_original.log");
         save_P(tempname);    
-    }
+    }*/ //P is not needed
     isLogging = true;
 
 	printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", N, D);    
