@@ -157,7 +157,8 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
             double* largeVisClockTime = p_model->get_clock_time();
             init_real_time += (largeVisRealTime[0] + largeVisRealTime[1]);
             init_cpu_time += (largeVisClockTime[0] + largeVisClockTime[1]);
-            if(pipelined) p_model->setThreadsNum(threadNum-1);
+            if(pipelined) p_model->setThreadsNum(threadNum/2);
+            //if(pipelined) p_model->setThreadsNum(threadNum-1);
         }
         else 
         {
@@ -235,7 +236,9 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     }
     if(!propDone && isPipelined)
     {
-        threading = false;
+        //threading = false;
+        n_threads = originalThreads/2;
+        num_threads = originalThreads/2;  
     }
     else
     {
@@ -1211,7 +1214,9 @@ void PixelSNE::save_data(const char* outfile, double* Y, int N, int D, double th
     }*/ //P is not needed
     isLogging = true;
 
-	printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", N, D);    
+	//printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", N, D);
+    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start_p);       
 }
 
 void PixelSNE::updateKNN(int i)
