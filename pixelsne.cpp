@@ -356,14 +356,14 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     fitting_cpu_time += (double)tt / CLOCKS_PER_SEC;
 
     // Print out progress
-    if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+    if (iter > 0 && ((iter+1) % 50 == 0 || iter == max_iter - 1)) {
 
         double C = .0;
         if(exact) C = evaluateError(P, Y, N, no_dims);
         else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
 
 
-        printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2lf real seconds, %4.2lf clock seconds)\n", iter, C, temptime1, temptime2);
+        printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2lf real seconds, %4.2lf clock seconds)\n", iter+1, C, temptime1, temptime2);
 
         temptime1 = 0;
         temptime2 = 0;
@@ -377,11 +377,12 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         free(neg_f); neg_f = NULL;
 
         if(exact) {free(P); P = NULL;}
-        else {
+        /*else {
             free(row_P); row_P = NULL;
             free(col_P); col_P = NULL;
             free(val_P); val_P = NULL;
-        }
+        }*/
+        //TODO: this should be freed when last error evaluation ended.
         
         printf("PixelSNE: Initialization: %.2lf real seconds\n", init_real_time);
         printf("PixelSNE: Initialization: %.2lf clock seconds\n", init_cpu_time);
