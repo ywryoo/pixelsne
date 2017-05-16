@@ -62,11 +62,23 @@ PixelSNE::PixelSNE() {
     propDone = false;
     originalThreads = 4;
     isPipelined = false;
+    outYs = NULL;
+    errors = NULL;
 }
 
 PixelSNE::~PixelSNE() {
     if (tree != NULL) delete tree;
     if (skip != NULL) free(skip); skip = NULL;
+    if (outYs != NULL)
+    {
+        for(int i = 0; i < max_iteration/50 ; i++)
+        {
+            free(outYs[i]);
+        }
+        free(outYs);
+        outYs = NULL;
+    }
+    if(errors != NULL) free(errors); errors = NULL;
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
@@ -101,6 +113,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
 	momentum = .5;
     final_momentum = .8;
 	eta = 200.0;
+    errors = (double *)malloc(sizeof(double)*max_iteration/50);
 
     // Allocate some memory
     dY    = (double*) malloc(N * no_dims * sizeof(double));
@@ -361,7 +374,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         double C = .0;
         if(exact) C = evaluateError(P, Y, N, no_dims);
         else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
-
+        errors[((iter+1)/50)-1] = C;
 
         printf("PixelSNE: Iteration %d: error is %f (50 iterations in %4.2lf real seconds, %4.2lf clock seconds)\n", iter+1, C, temptime1, temptime2);
 
@@ -1188,36 +1201,58 @@ void PixelSNE::save_data(double* data, int* landmarks, double* costs, int n, int
 	printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", n, d);
 }
 
-void PixelSNE::save_data(const char* outfile, double* Y, int N, int D, double theta, unsigned int bins, int iter)
-{
-    char tempname[1000];
-    char buffer[50];
-    sprintf(buffer, "_iter_%d.log", iter+1);
-    strcpy(tempname, outfile);
-    strcat(tempname, buffer);
-	FILE *h;
-	if((h = fopen(tempname, "w+b")) == NULL) {
-		printf("PixelSNE: Error: could not open data file.\n");
-		return;
-	}
-	fwrite(&N, sizeof(int), 1, h);
-	fwrite(&D, sizeof(int), 1, h);
-    fwrite(Y, sizeof(double), N * D, h);
-    double C = 0;
-    C = evaluateError(row_P, col_P, val_P, Y, N, D, theta, beta, bins, iter);
-    fwrite(&C, sizeof(double), 1, h);
+void PixelSNE::copy_y(double* Y,int N, int D, int iter) {
+    if(outYs == NULL)
+    {
+        int total_num = max_iteration/50;
+        outYs = (double **) malloc(sizeof(double*) * total_num);
+        for(int i = 0; i < total_num ; i++)
+        {
+            outYs[i] = (double *)malloc(sizeof(double)*N*D);
+        }
+    }
 
-    fclose(h);
+    memcpy(outYs[(iter/50)-1],Y,sizeof(double)*N*D);
+       
+    isLogging = true;
+}
+
+void PixelSNE::save_y(const char* outfile, int N, int D, double theta, unsigned int bins)
+{
+    printf("PixelSNE: Saving logs..\n");
+
+    int total_num = max_iteration/50;
+    for(int i = 0; i < total_num ; i++)
+    {
+        int iter = (i+1)*50;
+        char tempname[1000];
+        char buffer[50];
+        sprintf(buffer, "_iter_%d.log", iter);
+        strcpy(tempname, outfile);
+        strcat(tempname, buffer);
+        FILE *h;
+        if((h = fopen(tempname, "w+b")) == NULL) {
+            printf("PixelSNE: Error: could not open data file.\n");
+            return;
+        }
+        fwrite(&N, sizeof(int), 1, h);
+        fwrite(&D, sizeof(int), 1, h);
+        fwrite(outYs[i], sizeof(double), N * D, h);
+        fwrite(&errors[i], sizeof(double), 1, h);
+
+        fclose(h);
+
+
 /*    if(!isLogging)
     {
         strcpy(tempname, "P_original.log");
         save_P(tempname);    
     }*/ //P is not needed
-    isLogging = true;
+
 
 	//printf("PixelSNE: Wrote the %i x %i data matrix successfully!\n", N, D);
-    start = clock();
-    clock_gettime(CLOCK_MONOTONIC, &start_p);       
+    }
+    printf("PixelSNE: Saving logs.. Done\n");
 }
 
 void PixelSNE::updateKNN(int i)
