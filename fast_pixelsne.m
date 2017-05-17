@@ -7,7 +7,7 @@ function mappedX = fast_tsne(X, no_dims, initial_dims, perplexity, theta, alg, p
         initial_dims = 50;
     end
     if ~exist('perplexity', 'var') || isempty(perplexity)
-        perplexity = 30;
+        perplexity = 50;
     end
     if ~exist('theta', 'var') || isempty(theta)
         theta = 0.5;
@@ -28,19 +28,20 @@ function mappedX = fast_tsne(X, no_dims, initial_dims, perplexity, theta, alg, p
     M = pca(X,'NumComponents',initial_dims,'Algorithm',alg);
     X = X * M;
     % Run the fast diffusion SNE implementation
-    pixelsne_path = which('fast_pixelsne');
-    pixelsne_path = fileparts(pixelsne_path);
+    %pixelsne_path = which('fast_pixelsne');
+    %pixelsne_path = fileparts(pixelsne_path);
     write_data(X, no_dims, theta, perplexity, bins, p_method);
-    tic, system(fullfile(pixelsne_path,'./pixelsne')); toc
-    [mappedX, landmarks, costs] = read_data;   
-    landmarks = landmarks + 1;              % correct for Matlab indexing
-    delete('data.dat');
-    delete('result.dat');
+    wirte_label(labels);
+    %tic, system(fullfile(pixelsne_path,'./pixelsne')); toc
+    %[mappedX, landmarks, costs] = read_data;   
+    %landmarks = landmarks + 1;              % correct for Matlab indexing
+    %delete('data.dat');
+    %delete('result.dat');
 end
 
 function write_data(X, no_dims, theta, perplexity, bins, p_method)
     [n, d] = size(X);
-    h = fopen('data.dat', 'wb');
+    h = fopen('20news.dat', 'wb');
 	fwrite(h, n, 'integer*4');
 	fwrite(h, d, 'integer*4');
     fwrite(h, theta, 'double');
@@ -49,6 +50,16 @@ function write_data(X, no_dims, theta, perplexity, bins, p_method)
     fwrite(h, p_method, 'integer*4');
     fwrite(h, bins, 'integer*4');
     fwrite(h, X', 'double');
+	fclose(h);
+end
+
+function write_label(label)
+    [n, d] = size(label);
+    h = fopen('20news.label', 'w');
+    for i=1:n
+        tmp = sprintf("%d", label[i])
+        
+    end
 	fclose(h);
 end
 
