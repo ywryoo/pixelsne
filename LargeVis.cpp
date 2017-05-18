@@ -660,12 +660,12 @@ void LargeVis::run(long long out_d, long long n_thre, long long n_samp, long lon
 	if (n_trees < 0)
 	{
 		if (n_vertices < 100000)
-			n_trees = 10;
+			n_trees = 5;
 		else if (n_vertices < 1000000)
-			n_trees = 20;
+			n_trees = 10;
 		else if (n_vertices < 5000000)
-			n_trees = 50;
-		else n_trees = 100;
+			n_trees = 25;
+		else n_trees = 50;
 	}
 	printf("LargeVis: Threads: %lld\n", n_threads);
 	if (vec) { clean_graph(); construt_knn(); }
