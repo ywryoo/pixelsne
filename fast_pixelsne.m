@@ -57,7 +57,7 @@ function write_label(label)
     [n, d] = size(label);
     h = fopen('20news.label', 'w');
     for i=1:n
-        tmp = sprintf("%d", label[i])
+        tmp = sprintf('%d', label[i])
         
     end
 	fclose(h);
