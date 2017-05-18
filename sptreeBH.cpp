@@ -410,7 +410,7 @@ void *SPcomputeEdgeForcesThread(void *_id)
 }
 
 // Computes edge forces
-void SPTreeBH::computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, long long N, double* pos_f, long long num_threads)
+void SPTreeBH::computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f, int num_threads)
 {
 	ggglobal_N = N;
 	ggglobal_num_threads = num_threads;

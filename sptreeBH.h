@@ -102,7 +102,7 @@ public:
 	void getAllIndices(unsigned long long* indices);
 	unsigned long long getDepth();
     void computeNonEdgeForces(unsigned long long point_index, double theta, double neg_f[], double* sum_Q, double buff[]);
-	void computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, long long N, double* pos_f, long long num_threads);
+	void computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f, int num_threads);
     void print();
     
 private:

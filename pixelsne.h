@@ -66,7 +66,7 @@ public:
     PixelSNE();
     ~PixelSNE();
     void run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-        unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool isValidation, bool pipelined ,int max_iter=1000, int stop_lying_iter=250, 
+        unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne, bool isValidation, bool pipelined ,int max_iter=1000, int stop_lying_iter=250, 
         int mom_switch_iter=250);
     void load_data(const char* inputfile, double **data, int* n, int* d);
     bool load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed);
@@ -82,7 +82,7 @@ public:
 private:
     void computeGradient(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, double beta, unsigned int bins, int iter_cnt);
     void computeGradient(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta, double beta, unsigned int bins, int iter_cnt, int nthreads);
-    void computeGradientBH(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, long long N, long long D, double* dC, double theta);
+    void computeGradientBH(unsigned long long* inp_row_P, unsigned long long* inp_col_P, double* inp_val_P, double* Y, int N, int D, double* dC, double theta);
     void computeExactGradient(double* P, double* Y, int N, int D, double* dC);
     double evaluateError(double* P, double* Y, int N, int D);
     double evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta, double beta, unsigned int bins, int iter_cnt);
