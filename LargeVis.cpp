@@ -275,7 +275,7 @@ void *LargeVis::annoy_thread_caller(void *arg)
 
 void LargeVis::run_annoy()
 {
-    printf("LargeVis: n_tress: %d\n", n_trees);
+    printf("LargeVis: n_trees: %d\n", n_trees);
     printf("LargeVis: Running ANNOY(Generating RP Trees) ......\n");
 	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
 	
