@@ -86,7 +86,7 @@ private:
     void computeExactGradient(double* P, double* Y, int N, int D, double* dC);
     double evaluateError(double* P, double* Y, int N, int D);
     double evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta, double beta, unsigned int bins, int iter_cnt);
-    double evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, long long N, long long D, double theta);
+    double evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta);
     void zeroMean(double* X, int N, int D);
     double minmax(double* X, int N, int D, double beta, unsigned int bins, int iter_cnt);
     void computeGaussianPerplexity(double* X, int N, int D, double* P, double perplexity);

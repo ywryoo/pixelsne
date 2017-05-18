@@ -461,6 +461,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
 
         double C = .0;
         if(exact) C = evaluateError(P, Y, N, no_dims);
+        else if(bhsneOnly) C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);
         else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta, beta, bins, iter);  // doing approximate computation here!
         errors[((iter+1)/50)-1] = C;
 
@@ -824,6 +825,67 @@ void *computeNonEdgeForcesForErrorThread(void *_id)
 
 	return NULL;
 }
+
+
+void *BHcomputeNonEdgeForcesForErrorThread(void *_id)
+{
+	long long id = (long long)_id;
+	long long lo = id * nnnum_vertices / nnnum_threads;
+	long long hi = (id + 1) * nnnum_vertices / nnnum_threads;
+
+	long long i;
+//	double sum_Q;
+	gggglobal_sumq[id] = 0;
+	for (i = lo; i < hi; ++i)
+	{
+		BHtree->computeNonEdgeForces(i, gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
+//		gggglobal_sumq[id] += sum_Q;
+	}
+
+	return NULL;
+}
+
+// Evaluate t-SNE cost function (approximately)
+double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta)
+{
+    
+    // Get estimate of normalization term
+    BHtree = new SPTreeBH(D, Y, N);
+    double* buff = (double*) calloc(D * N, sizeof(double));
+    double sum_Q = .0;
+
+	gggglobal_negf = buff;
+	boost::thread *pt = new boost::thread[nnnum_threads];
+	for (long long i = 0; i < nnnum_threads; ++i) pt[i] = boost::thread(BHcomputeNonEdgeForcesForErrorThread, (void*)i);
+	for (long long i = 0; i < nnnum_threads; ++i) pt[i].join();
+	delete[] pt;
+	for (long long i = 0; i < nnnum_threads; ++i)
+		sum_Q += gggglobal_sumq[i];
+
+//	for (long long n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, buff, &sum_Q);
+    
+    // Loop over all edges to compute t-SNE error
+	long long ind1, ind2;
+    double C = .0, Q;
+	for (long long n = 0; n < N; n++) {
+        ind1 = n * D;
+		for (long long i = row_P[n]; i < row_P[n + 1]; i++) {
+            Q = .0;
+            ind2 = col_P[i] * D;
+			for (long long d = 0; d < D; d++) buff[d] = Y[ind1 + d];
+			for (long long d = 0; d < D; d++) buff[d] -= Y[ind2 + d];
+			for (long long d = 0; d < D; d++) Q += buff[d] * buff[d];
+            Q = (1.0 / (1.0 + Q)) / sum_Q;
+            C += val_P[i] * log((val_P[i] + FLT_MIN) / (Q + FLT_MIN));
+        }
+    }
+    
+    // Clean up memory
+    free(buff);
+    delete BHtree;
+    return C;
+}
+
 
 // Evaluate t-SNE cost function (approximately)
 double PixelSNE::evaluateError(unsigned long long* row_P, unsigned long long* col_P, double* val_P, double* Y, int N, int D, double theta, double beta, unsigned int bins, int iter_cnt)
