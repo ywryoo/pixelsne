@@ -52,7 +52,7 @@ double *gggglobal_negf, gggglobal_theta, *gggglobal_sumq, *buff;
 
 double *gggglobal_gains, *gggglobal_dY, *gggglobal_uY, *gggglobal_Y;
 double *gggglobal_eta, *gggglobal_momentum;
-int *gggglobal_N, *gggglobal_no_dims;
+int *gggglobal_N, *gggglobal_no_dims, *gggglobal_skip_cnt, *gggglobal_skip;
 float build_tree = 0;
 
 
@@ -133,6 +133,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     errors = (double *)malloc(sizeof(double)*max_iteration/50);
 	buff = (double*)malloc(nnnum_threads * vvvector_dim * sizeof(double));
 	gggglobal_sumq = (double*)malloc(nnnum_threads * sizeof(double));
+    gggglobal_skip_cnt = (int*)malloc(nnnum_threads * sizeof(int));
 
 
     // Allocate some memory
@@ -400,7 +401,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
     }
     // Perform gradient update (with momentum and gains)
-    if(sleepingg)
+    if(sleepingg && (iter >= stop_lying_iter + 150))
     {
         for(int i = 0; i < N * no_dims; i++) {
             if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims])
@@ -512,10 +513,24 @@ void *BHcomputeNonEdgeForcesThread(void *_id)
 	long long i;
 //	double sum_Q;
 	gggglobal_sumq[id] = 0;
+    gggglobal_skip_cnt[id] = 0;
 	for (i = lo; i < hi; ++i)
 	{
-		BHtree->computeNonEdgeForces(i, gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
-//		gggglobal_sumq[id] += sum_Q;
+        if(globalIsSleeping)
+        {
+            if(gggglobal_skip[i]>1 ) gggglobal_skip[i]--;
+            if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]||gggglobal_skip[i]==0){
+        		BHtree->computeNonEdgeForces(i, gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
+            }
+            else{
+                gggglobal_skip_cnt[id]++;
+            }
+
+        }
+        else
+        {
+            BHtree->computeNonEdgeForces(i, gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
+        }
 	}
 
 	return NULL;
@@ -750,7 +765,8 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
     BHtree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f, nnnum_threads);
 	gggglobal_negf = neg_f;
 	gggglobal_theta = theta;
-
+    globalIsSleeping = isSleeping;
+    gggglobal_skip = skip;
 //	for (long long n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
     
 	boost::thread *pt = new boost::thread[nnnum_threads];
@@ -760,10 +776,27 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
 	for (long long i = 0; i < nnnum_threads; ++i)
 		sum_Q += gggglobal_sumq[i];
 
-    // Compute final t-SNE gradient
-	for (long long i = 0; i < N * D; i++) {
-        dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+    if(isSleeping)
+    {
+        int cntt = 0;
+        for(int i = 0; i < nnnum_threads; ++i) cntt += gggglobal_skip_cnt[i];
+        if(cntt != 0) printf("PixelSNE: SGD Skipped : %d\n",cntt);
+
+        // Compute final t-SNE gradient
+        for(int i = 0; i < N * D; i++) {
+            if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+                dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+            else dC[i]=0;
+        }
     }
+    else
+    {
+        // Compute final t-SNE gradient 
+        for(int i = 0; i < N * D; i++) { 
+            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        }
+    }
+    
     free(pos_f);
     free(neg_f);
 //	printf("Finished computing\n");
