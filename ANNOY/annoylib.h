@@ -344,7 +344,7 @@ public:
     int fd = open(filename, O_RDONLY, (int)0400);
     if (fd == -1)
       return false;
-    long long size = lseek64(fd, 0, SEEK_END);
+    long long size = lseek(fd, 0, SEEK_END);
 //	printf("File size %lld\n", size);
 #ifdef MAP_POPULATE
     _nodes = (Node*)mmap(

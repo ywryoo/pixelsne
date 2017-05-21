@@ -400,29 +400,48 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         // Update gains
         for(int i = 0; i < N * no_dims; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
     }
-    // Perform gradient update (with momentum and gains)
-    if(sleepingg && (iter >= stop_lying_iter + 150))
+        if(sleepingg && (iter >= stop_lying_iter + 150))
     {
-        for(int i = 0; i < N * no_dims; i++) {
-            if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims])
-                uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-            if((i%no_dims)==0&&iter>stop_lying_iter_num+150){
-                if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//have to be checked
-                    if(-0.01<=uY[i]&&uY[i]<=0.01) {
-                        if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]){//to see skip[i] is 2^n
-                            skip[i/no_dims]*=4;
-                            skip[i/no_dims]--;
+        double srate=500;
+
+
+        int iddim,nno_dims=N*no_dims;
+        /*only works in 2D!!! if change to 3d, needs change*/
+        double f_temp,big[2]={-1,-1},small[2]={1,1};
+        for(int i=0;i<nno_dims;i++){
+            if(big[i%2]<Y[i]) big[i%2]=Y[i];
+            if(small[i%2]>Y[i]) small[i%2]=Y[i];
+        }
+        double threshold=(big[0]-small[0])*(big[1]-small[1])/N/srate;
+        //쓰레시홀드도 제곱단위 uY도 제곱단위
+        //일단 밀도.
+        for(int i = 0; i < nno_dims; i++) {
+            iddim=i/no_dims;
+            if(((skip[iddim])&(-skip[iddim]))==skip[iddim])
+                uY[i] = momentum * uY[i] - eta * gains[i] * dY[i] * skip[iddim];
+            if((i%no_dims)==no_dims-1){
+                if(((skip[iddim])&(-skip[iddim]))==skip[iddim]){//have to be checked
+                    f_temp=0;
+                    for(int d=0;d<no_dims;d++){
+                        f_temp+=uY[i*no_dims+d]*uY[i*no_dims+d];
+                    }
+                    if(f_temp<=threshold) {
+                        if(((skip[iddim])&(-skip[iddim]))==skip[iddim]){//to see skip[i] is 2^n
+                            skip[iddim]*=4;
+                            skip[iddim]--;
+                            if(skip[iddim]>16)skip[iddim]=15;
                         }
                     }
                     else {
-                        skip[i/no_dims]=1;
+                        skip[iddim]=1;
                     }
                 }
             }
         }
-        for(int i = 0; i < N * no_dims; i++) 
+        for(int i = 0; i < nno_dims; i++) 
         {
-            if(((skip[i/no_dims])&(-skip[i/no_dims]))==skip[i/no_dims]||skip[i/no_dims]==0)
+            iddim=i/no_dims;
+            if(((skip[iddim])&(-skip[iddim]))==skip[iddim])
                 Y[i] = Y[i] + uY[i];
         }
     }
@@ -635,6 +654,7 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
         for(int i = 0; i < N * D; i++) { 
             dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
         }
+
     }
     free(global2_sumq); global2_sumq = NULL;
     free(global2_skip_cnt); global2_skip_cnt = NULL;
@@ -794,6 +814,7 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
         // Compute final t-SNE gradient 
         for(int i = 0; i < N * D; i++) { 
             dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        
         }
     }
     
