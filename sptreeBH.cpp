@@ -97,7 +97,7 @@ bool Celll::containsPoint(double point[])
 
 
 // Default constructor for SPTreeBH -- build tree, too!
-SPTreeBH::SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N)
+SPTreeBH::SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N, SPTreeBH **table)
 {
     
     // Compute mean, width, and height of current map (boundaries of SPTreeBH)
@@ -114,6 +114,7 @@ SPTreeBH::SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N)
         nD += D;
     }
     for(long long d = 0; d < D; d++) mean_Y[d] /= (double) N;
+    treeTable = table;
     
     // Construct SPTreeBH
     double* width = (double*) malloc(D * sizeof(double));
@@ -145,8 +146,9 @@ SPTreeBH::SPTreeBH(unsigned long long D, double* inp_data, double* inp_corner, d
 
 
 // Constructor for SPTreeBH with particular size and parent (do not fill tree)
-SPTreeBH::SPTreeBH(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, double* inp_corner, double* inp_width) {
+SPTreeBH::SPTreeBH(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, double* inp_corner, double* inp_width, SPTreeBH** table) {
     init(inp_parent, D, inp_data, inp_corner, inp_width);
+    treeTable = table;
 }
 
 
@@ -229,6 +231,7 @@ bool SPTreeBH::insert(unsigned long long new_index)
     // If there is space in this quad tree and it is a leaf, add the object here
     if(is_leaf && size < QT_NODE_CAPACITY) {
         index[size] = new_index;
+        if(treeTable != NULL) treeTable[new_index] = this;
         size++;
         return true;
     }
@@ -271,7 +274,7 @@ void SPTreeBH::subdivide() {
             else                   new_corner[d] = boundary->getCorner(d) + .5 * boundary->getWidth(d);
             div *= 2;
         }
-        children[i] = new SPTreeBH(this, dimension, data, new_corner, new_width);
+        children[i] = new SPTreeBH(this, dimension, data, new_corner, new_width, treeTable);
     }
     free(new_corner);
     free(new_width);
@@ -296,7 +299,6 @@ void SPTreeBH::fill(unsigned long long N)
 {
     for(unsigned long long i = 0; i < N; i++) insert(i);
 }
-
 
 // Checks whether the specified tree is correct
 bool SPTreeBH::isCorrect()
@@ -346,6 +348,8 @@ unsigned long long SPTreeBH::getDepth() {
 }
 
 
+
+
 // Compute non-edge forces using Barnes-Hut algorithm
 void SPTreeBH::computeNonEdgeForces(unsigned long long point_index, double theta, double neg_f[], double* sum_Q, double buff[])
 {
@@ -380,6 +384,57 @@ void SPTreeBH::computeNonEdgeForces(unsigned long long point_index, double theta
         for(unsigned long long i = 0; i < no_children; i++) children[i]->computeNonEdgeForces(point_index, theta, neg_f, sum_Q, buff);
     }
 }
+
+// Compute non-edge forces using Barnes-Hut algorithm
+void SPTreeBH::computeNonEdgeForces(unsigned long long point_index, double theta, double neg_f[], double* sum_Q, double buff[], int depth)
+{
+    // Make sure that we spend no time on empty nodes or self-interactions
+    if(cum_size == 0 || (is_leaf && size == 1 && index[0] == point_index)) return;
+    
+    // Compute distance between point and center-of-mass
+    double D = .0;
+    unsigned long long ind = point_index * dimension;
+    for(unsigned long long d = 0; d < dimension; d++) buff[d] = data[ind + d] - center_of_mass[d];
+    for(unsigned long long d = 0; d < dimension; d++) D += buff[d] * buff[d];
+    
+    // Check whether we can use this node as a "summary"
+    double max_width = 0.0;
+    double cur_width;
+    for(unsigned long long d = 0; d < dimension; d++) {
+        cur_width = boundary->getWidth(d);
+        max_width = (max_width > cur_width) ? max_width : cur_width;
+    }
+    if(is_leaf || max_width / sqrt(D) < theta) {
+    
+        // Compute and add t-SNE force between point and current node
+        D = 1.0 / (1.0 + D);
+        double mult = cum_size * D;
+        *sum_Q += mult;
+        mult *= D;
+        for(unsigned long long d = 0; d < dimension; d++) neg_f[d] += mult * buff[d];
+    }
+    else {
+        // Recursively apply Barnes-Hut to children
+        if(depth < 100)
+            for(unsigned long long i = 0; i < no_children; i++) children[i]->computeNonEdgeForces(point_index, theta, neg_f, sum_Q, buff,depth+1);
+    }
+}
+
+
+// Compute non-edge forces using Barnes-Hut algorithm
+void SPTreeBH::computeRepForces(SPTreeBH* current, double theta, double neg_f[], double* sum_Q, double buff[])
+{
+    SPTreeBH* tempTree = current;
+    for(int i = 0; i < 100; i++)
+    {
+        if(tempTree->getParent() != NULL)
+            tempTree = tempTree->getParent();
+
+    }
+    tempTree->computeNonEdgeForces(current->getIndex(), theta, neg_f, sum_Q, buff, 0);
+}
+
+
 
 void *SPcomputeEdgeForcesThread(void *_id)
 {
@@ -426,6 +481,10 @@ void SPTreeBH::computeEdgeForces(unsigned long long* row_P, unsigned long long* 
 	for (long long i = 0; i < num_threads; ++i) pt[i] = boost::thread(SPcomputeEdgeForcesThread, (void*)i);
 	for (long long i = 0; i < num_threads; ++i) pt[i].join();
 	delete[] pt;
+}
+unsigned long long SPTreeBH::getIndex()
+{
+    return index[0];
 }
 
 

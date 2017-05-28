@@ -5,6 +5,7 @@
 #define PIXELSNE_H
 
 #include "ptree.h"
+#include "sptreeBH.h"
 #include "LargeVis.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -55,6 +56,7 @@ private:
     int stop_lying_iter_num;
     double **outYs;
     double *errors;
+    SPTreeBH **treeTable;
     bool bhsneOnly;
 public:
     double fitting_cpu_time;

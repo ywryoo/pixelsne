@@ -54,6 +54,7 @@ double *gggglobal_gains, *gggglobal_dY, *gggglobal_uY, *gggglobal_Y,gggglobal_th
 double *gggglobal_eta, *gggglobal_momentum;
 int *gggglobal_N, *gggglobal_no_dims, *gggglobal_skip_cnt, gggglobal_iter, *gggglobal_skip, gggglobal_stop_lying_iter;
 float build_tree = 0;
+SPTreeBH** gggglobal_tree;
 
 
 PixelSNE::PixelSNE() {
@@ -77,6 +78,7 @@ PixelSNE::PixelSNE() {
     outYs = NULL;
     errors = NULL;
     bhsneOnly = false;
+    treeTable = NULL;
 }
 
 PixelSNE::~PixelSNE() {
@@ -553,7 +555,7 @@ void *BHcomputeNonEdgeForcesThread(void *_id)
         }
         else
         {
-            BHtree->computeNonEdgeForces(i, gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
+            BHtree->computeRepForces(gggglobal_tree[i], gggglobal_theta, gggglobal_negf + i * vvvector_dim, &gggglobal_sumq[id], &buff[id * vvvector_dim]);
         }
 	}
 
@@ -779,7 +781,12 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
 //	printf("Start computing gradient ... \n");
     // Construct space-partitioning tree on current map
 
-    BHtree = new SPTreeBH(D, Y, N);
+    if(treeTable == NULL)
+    {
+        treeTable = (SPTreeBH**) malloc(N * sizeof(SPTreeBH*));
+    }
+
+    BHtree = new SPTreeBH(D, Y, N, treeTable);
 //	printf("Finished building tree\n");
     // Compute all terms required for t-SNE gradient
     double sum_Q = .0;
@@ -792,6 +799,7 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
 	gggglobal_theta = theta;
     globalIsSleeping = isSleeping;
     gggglobal_skip = skip;
+    gggglobal_tree = treeTable;
 //	for (long long n = 0; n < N; n++) tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q);
     
 	boost::thread *pt = new boost::thread[nnnum_threads];

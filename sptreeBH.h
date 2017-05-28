@@ -83,14 +83,15 @@ class SPTreeBH
     
     // Children
     SPTreeBH** children;
+    SPTreeBH **treeTable;
 	unsigned long long no_children;
     
 public:
-	SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N);
+	SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N, SPTreeBH** treeTable=NULL);
 	SPTreeBH(unsigned long long D, double* inp_data, double* inp_corner, double* inp_width);
 	SPTreeBH(unsigned long long D, double* inp_data, unsigned long long N, double* inp_corner, double* inp_width);
 	SPTreeBH(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, unsigned long long N, double* inp_corner, double* inp_width);
-	SPTreeBH(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, double* inp_corner, double* inp_width);
+	SPTreeBH(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, double* inp_corner, double* inp_width, SPTreeBH** treeTable=NULL);
     ~SPTreeBH();
     void setData(double* inp_data);
     SPTreeBH* getParent();
@@ -102,8 +103,11 @@ public:
 	void getAllIndices(unsigned long long* indices);
 	unsigned long long getDepth();
     void computeNonEdgeForces(unsigned long long point_index, double theta, double neg_f[], double* sum_Q, double buff[]);
+    void computeNonEdgeForces(unsigned long long point_index, double theta, double neg_f[], double* sum_Q, double buff[], int depth);
+    void computeRepForces(SPTreeBH* current, double theta, double neg_f[], double* sum_Q, double buff[]);
 	void computeEdgeForces(unsigned long long* row_P, unsigned long long* col_P, double* val_P, int N, double* pos_f, int num_threads);
     void print();
+    unsigned long long getIndex();
     
 private:
     void init(SPTreeBH* inp_parent, unsigned long long D, double* inp_data, double* inp_corner, double* inp_width);
