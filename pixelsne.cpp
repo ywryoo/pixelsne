@@ -54,7 +54,7 @@ double *gggglobal_gains, *gggglobal_dY, *gggglobal_uY, *gggglobal_Y,gggglobal_th
 double *gggglobal_eta, *gggglobal_momentum;
 int *gggglobal_N, *gggglobal_no_dims, *gggglobal_skip_cnt, gggglobal_iter, *gggglobal_skip, gggglobal_stop_lying_iter;
 float build_tree = 0;
-
+double *temp_x, *temp_y;
 
 PixelSNE::PixelSNE() {
     KNNupdated = false;
@@ -81,7 +81,11 @@ PixelSNE::PixelSNE() {
 
 PixelSNE::~PixelSNE() {
     if (tree != NULL) delete tree;
-    if (skip != NULL) free(skip); skip = NULL;
+    if (skip != NULL) {
+        free(skip); skip = NULL;
+        free(temp_x);
+        free(temp_y);
+    }
     if (outYs != NULL)
     {
         for(int i = 0; i < max_iteration/50 ; i++)
@@ -260,47 +264,43 @@ void *BHupdateGradientThread(void *_id)
 
 	long long hi = (id + 1) * *gggglobal_N / nnnum_threads;
 	//printf("%lld %lld %lld\n", id, lo, hi);
-
+    int f_temp;
     if(globalIsSleeping && (gggglobal_iter >= gggglobal_stop_lying_iter + 150))
     {
         for (long long i = lo * *gggglobal_no_dims; i < hi * *gggglobal_no_dims; ++i)
         {
-            int iddim;
-            /*only works in 2D!!! if change to 3d, needs change*/
             double f_temp;
-            //쓰레시홀드도 제곱단위 uY도 제곱단위
-            //일단 밀도.
-            iddim=i/(*gggglobal_no_dims);
-            if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){
+            if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){
                 gggglobal_gains[i] = (sign(gggglobal_dY[i]) != sign(gggglobal_uY[i])) ? (gggglobal_gains[i] + .2) : (gggglobal_gains[i] * .8);
                 if (gggglobal_gains[i] < .01) gggglobal_gains[i] = .01;
                 gggglobal_uY[i] = *gggglobal_momentum * gggglobal_uY[i] - *gggglobal_eta * gggglobal_gains[i] * gggglobal_dY[i];
             }
+
             if((i%(*gggglobal_no_dims))==(*gggglobal_no_dims)-1){
-                if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){//have to be checked
+                if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){//have to be checked
                     f_temp=0;
                     for(int d=0;d<(*gggglobal_no_dims);d++){
+//                        f_temp+=gggglobal_uY[i*(*gggglobal_no_dims)+d]*gggglobal_uY[i*(*gggglobal_no_dims)+d];
                         f_temp+=gggglobal_uY[i*(*gggglobal_no_dims)+d]*gggglobal_uY[i*(*gggglobal_no_dims)+d];
                     }
                     if(f_temp<=gggglobal_threshold) {
-                        if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){//to see gggglobal_skip[i] is 2^n
-                            gggglobal_skip[iddim]*=4;
-                            gggglobal_skip[iddim]--;
-                            if(gggglobal_skip[iddim]>16)gggglobal_skip[iddim]=15;
+                        if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){//to see gggglobal_skip[i] is 2^n
+                            gggglobal_skip[i]*=4;
+                            gggglobal_skip[i]--;
+                            if(gggglobal_skip[i]>16)gggglobal_skip[i]=15;
                         }
                     }
                     else {
-                        gggglobal_skip[iddim]=1;
+                        gggglobal_skip[i]=1;
                     }
                 }
             }
+
+            if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i])
+                gggglobal_Y[i] = gggglobal_Y[i] + gggglobal_uY[i];
             
 
-            iddim=i/(*gggglobal_no_dims);
-            if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim])
-                gggglobal_Y[i] = gggglobal_Y[i] + gggglobal_uY[i];
         }
-    
     }
     else
     {
@@ -345,6 +345,8 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
     if(sleepingg && skip == NULL)
     {
         skip = (int *) malloc(N * sizeof(int));
+        temp_x=(double*)malloc(N*sizeof(double));
+        temp_y=(double*)malloc(N*sizeof(double));
         for(int i = 0; i < N; i++)    skip[i]=1;
     }
     if(!propDone && isPipelined)
@@ -402,15 +404,24 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         computeGradientBH(row_P, col_P, val_P, Y, N, no_dims, dY, theta);
         if(globalIsSleeping && (iter >= gggglobal_stop_lying_iter + 150))
         {
-            double big[2]={0,0},small[2]={10000,10000};
-            for(int i=0;i<N*no_dims;i++){
-                if(big[i%2]<Y[i]) big[i%2]=Y[i];
-                if(small[i%2]>Y[i]) small[i%2]=Y[i];
+            for(int i=0;i<N;i++){
+                temp_x[i]=Y[(i<<1)];
+                temp_y[i]=Y[(i<<1)+1];
             }
-            double threshold=(big[0]-small[0])*(big[1]-small[1])/N/srate;
+            sort(temp_x,temp_x+N);
+            sort(temp_y,temp_y+N);
+ //           double min_len=5;
+            double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])*(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4]);
+            threshold/=srate;
+            threshold/=(double)N;
+            threshold/=(double)N;
+            printf("fixed : x = %lf ~ %lf / y = %lf ~ %lf\n",temp_x[3*N/4],temp_x[N/4],temp_y[3*N/4],temp_y[N/4]);
             gggglobal_threshold = threshold;
+            printf("srate %.1lf / threshold : %.10lf\n",srate,threshold);
+//            if((temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])<min_len*min_len){
+ //               gggglobal_threshold=0;
+  //          }
         }
-
 //		printf("===\n");
 		boost::thread *pt = new boost::thread[nnnum_threads];
 		for (long long i = 0; i < nnnum_threads; ++i) pt[i] = boost::thread(BHupdateGradientThread, (void*)i);
