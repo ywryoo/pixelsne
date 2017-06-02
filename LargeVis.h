@@ -30,6 +30,25 @@
 
 #include <pthread.h>
 #include <gsl/gsl_rng.h>
+#include <iostream>
+#include <cassert>
+#include <cstdlib>
+#include <sstream>
+
+#include "init.h"
+#include "object.h"
+#include "index.h"
+#include "params.h"
+#include "rangequery.h"
+#include "knnquery.h"
+#include "knnqueue.h"
+#include "methodfactory.h"
+
+#include "ztimer.h"
+
+
+
+#include "space/space_vector_gen.h"
 
 typedef float real;
 
@@ -61,6 +80,7 @@ private:
 	bool *knn_not_changed;
 	double real_time[50] = {0};
 	double cpu_time[50] = {0};
+	similarity::ObjectVector    dataSet; 
 	//0: normalize + rptrees(annoy), 1: knn->P for 0
 	//0 + 1: init time
 	//2: propagation 1, 3: knn->P for 2

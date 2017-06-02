@@ -20,6 +20,21 @@
 #include <map>
 #include <float.h>
 #define BILLION 1000000000L
+#define METHOD 1
+using namespace similarity;
+/*
+ * Define an implementation of the distance function.
+ */
+struct DistL2 {
+  /*
+   * Important: the function is const and arguments are const as well!!!
+   */
+  float operator()(const float* x, const float* y, size_t qty) const {
+    float res = 0;
+    for (size_t i = 0; i < qty; ++i) res+=(x[i]-y[i])*(x[i]-y[i]);
+    return sqrt(res);
+  }
+};
 clock_t sstart, eend;
 LargeVis::LargeVis()
 {
@@ -243,25 +258,47 @@ void LargeVis::annoy_thread(int id)
 {
 	long long lo = id * n_vertices / n_threads;
 	long long hi = (id + 1) * n_vertices / n_threads;
-	AnnoyIndex<int, real, Euclidean, Kiss64Random> *cur_annoy_index = NULL;
-	if (id > 0)
+	if(METHOD == 0)
 	{
-		cur_annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
-		cur_annoy_index->load("annoy_index_file");
+		AnnoyIndex<int, real, Euclidean, Kiss64Random> *cur_annoy_index = NULL;
+		if (id > 0)
+		{
+			cur_annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
+			cur_annoy_index->load("annoy_index_file");
+		}
+		else
+			cur_annoy_index = annoy_index;
+		for (long long i = lo; i < hi; ++i)
+		{
+			cur_annoy_index->get_nns_by_item(i, n_neighbors + 1, (n_neighbors + 1) * n_trees, &knn_vec[i], NULL);
+			for (long long j = 0; j < knn_vec[i].size(); ++j)
+				if (knn_vec[i][j] == i)
+				{
+					knn_vec[i].erase(knn_vec[i].begin() + j);
+					break;
+				}
+		}
+		if (id > 0) delete cur_annoy_index;
 	}
 	else
-		cur_annoy_index = annoy_index;
-	for (long long i = lo; i < hi; ++i)
 	{
-		cur_annoy_index->get_nns_by_item(i, n_neighbors + 1, (n_neighbors + 1) * n_trees, &knn_vec[i], NULL);
-		for (long long j = 0; j < knn_vec[i].size(); ++j)
-			if (knn_vec[i][j] == i)
-			{
-				knn_vec[i].erase(knn_vec[i].begin() + j);
-				break;
-			}
+		Index<float>* cur_index;
+		unsigned K = 5; // 5-NN query
+		cur_index->LoadIndex("HnswIndex");
+		VectorSpaceGen<float, DistL2>   customSpace;
+		for (long long i = lo; i < hi; ++i)
+		{
+			
+			KNNQuery<float>   knnQ(customSpace, dataSet[i], K);
+			cur_index->Search(&knnQ);
+
+		}
+		  vector<string>                  vExternIds;
+		vExternIds.resize(dataSet.size()); 
+		customSpace.WriteDataset(dataSet, vExternIds, "testdataset.txt");
+
+		delete cur_index;cur_index=NULL;
 	}
-	if (id > 0) delete cur_annoy_index;
 
 
 }
@@ -275,24 +312,75 @@ void *LargeVis::annoy_thread_caller(void *arg)
 
 void LargeVis::run_annoy()
 {
-    printf("LargeVis: n_trees: %d\n", n_trees);
-    printf("LargeVis: Running ANNOY(Generating RP Trees) ......\n");
-	annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
-	
-	
-	for (long long i = 0; i < n_vertices; ++i)
-		annoy_index->add_item(i, &vec[i * n_dim]);
-	annoy_index->build(n_trees);
-	if (n_threads > 1) annoy_index->save("annoy_index_file");
+	if(METHOD == 0)
+	{
+		printf("LargeVis: n_trees: %d\n", n_trees);
+		printf("LargeVis: Running ANNOY(Generating RP Trees) ......\n");
+		annoy_index = new AnnoyIndex<int, real, Euclidean, Kiss64Random>(n_dim);
+		
+		
+		for (long long i = 0; i < n_vertices; ++i)
+			annoy_index->add_item(i, &vec[i * n_dim]);
+		annoy_index->build(n_trees);
+		if (n_threads > 1) annoy_index->save("annoy_index_file");
 
-	knn_vec = new std::vector<int>[n_vertices];
-	
-	pthread_t *pt = new pthread_t[n_threads];
-	for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::annoy_thread_caller, new arg_struct(this, j));
-	for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
-	delete[] pt;
-    delete annoy_index; annoy_index = NULL;
-	printf("LargeVis: Running ANNOY(Generating RP Trees) Done.\n");
+		knn_vec = new std::vector<int>[n_vertices];
+		
+		pthread_t *pt = new pthread_t[n_threads];
+		for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::annoy_thread_caller, new arg_struct(this, j));
+		for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
+		delete[] pt;
+		delete annoy_index; annoy_index = NULL;
+		printf("LargeVis: Running ANNOY(Generating RP Trees) Done.\n");
+	}
+	else
+	{
+		printf("LargeVis: HNSW On\n");
+		std::vector<std::vector<float>>  rawData;
+
+		VectorSpaceGen<float, DistL2>   customSpace;
+		for(long long i = 0; i < n_vertices; ++i)
+		{
+			std::vector<float> temp;
+			for(long long j = 0; j < n_dim; ++j)
+			{
+				temp.push_back(vec[i*n_dim+j]);
+			}
+			rawData.push_back(temp);
+
+		}
+		vector<LabelType> labels(rawData.size()); 
+		customSpace.CreateDataset(dataSet, rawData, labels); 
+		initLibrary(LIB_LOGFILE, "logfile.txt"); 
+		AnyParams IndexParams(
+								{
+								"M=10",
+								"indexThreadQty=4" /* 4 indexing threads */
+								});
+
+		AnyParams QueryTimeParams( { "efSearch=10", "efSearch=20", "efSearch=40", "efSearch=80", "efSearch=160", "efSearch=240" });
+
+		Index<float>* HnswIndex = 
+                        MethodFactoryRegistry<float>::Instance().
+                                CreateMethod(false /* don't print progress */,
+                                        "hnsw",
+                                        "custom",
+                                        customSpace,
+                                        dataSet);
+		HnswIndex->CreateIndex(IndexParams);
+		HnswIndex->SetQueryTimeParams(QueryTimeParams);
+		HnswIndex->SaveIndex("HnswIndex");
+		
+		knn_vec = new std::vector<int>[n_vertices];
+		
+		pthread_t *pt = new pthread_t[n_threads];
+		for (int j = 0; j < n_threads; ++j) pthread_create(&pt[j], NULL, LargeVis::annoy_thread_caller, new arg_struct(this, j));
+		for (int j = 0; j < n_threads; ++j) pthread_join(pt[j], NULL);
+		delete[] pt;
+		//delete[] rawData; rawData = NULL;
+		//delete dataSet; dataSet = NULL;
+	}
+
 }
 
 void LargeVis::propagation_thread(int id)
