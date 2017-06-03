@@ -282,21 +282,35 @@ void LargeVis::annoy_thread(int id)
 	}
 	else
 	{
-		Index<float>* cur_index;
 		unsigned K = 5; // 5-NN query
+						
+		Index<float>* cur_index =
+                        MethodFactoryRegistry<float>::Instance().
+                                CreateMethod(false /* don't print progress */,
+                                        "hnsw",
+                                        "l2",
+                                        *customSpace,
+                                        dataSet);
 		cur_index->LoadIndex("HnswIndex");
-		VectorSpaceGen<float, DistL2>   customSpace;
 		for (long long i = lo; i < hi; ++i)
 		{
-			
-			KNNQuery<float>   knnQ(customSpace, dataSet[i], K);
+					AnyParams tempParams;
+			Space<float> *space = SpaceFactoryRegistry<float>::Instance().
+				CreateSpace("l2", tempParams);
+			KNNQuery<float>   knnQ(*space, dataSet[i], K);
 			cur_index->Search(&knnQ);
+			KNNQueue<float>* res = (&knnQ)->Result()->Clone();
 
+			while (!res->Empty() && i == 10) {
+				cout << res->TopObject()->id() << " : " << res->TopDistance() << endl;
+				res->Pop();
+			}
 		}
-		  vector<string>                  vExternIds;
-		vExternIds.resize(dataSet.size()); 
-		customSpace.WriteDataset(dataSet, vExternIds, "testdataset.txt");
 
+
+		vector<string>                  vExternIds;
+		vExternIds.resize(dataSet.size()); 
+		customSpace->WriteDataset(dataSet, vExternIds, "testdataset.txt");
 		delete cur_index;cur_index=NULL;
 	}
 
@@ -336,9 +350,11 @@ void LargeVis::run_annoy()
 	else
 	{
 		printf("LargeVis: HNSW On\n");
-		std::vector<std::vector<float>>  rawData;
 
-		VectorSpaceGen<float, DistL2>   customSpace;
+		initLibrary(LIB_LOGFILE, "logfile.txt"); 
+		AnyParams tempParams;
+		customSpace = SpaceFactoryRegistry<float>::Instance().
+			CreateSpace("l2", tempParams);
 		for(long long i = 0; i < n_vertices; ++i)
 		{
 			std::vector<float> temp;
@@ -346,31 +362,32 @@ void LargeVis::run_annoy()
 			{
 				temp.push_back(vec[i*n_dim+j]);
 			}
-			rawData.push_back(temp);
+			dataSet.push_back(new Object(i, -1, temp.size() * sizeof(float), &temp[0]));
 
 		}
-		vector<LabelType> labels(rawData.size()); 
-		customSpace.CreateDataset(dataSet, rawData, labels); 
-		initLibrary(LIB_LOGFILE, "logfile.txt"); 
+
 		AnyParams IndexParams(
 								{
 								"M=10",
 								"indexThreadQty=4" /* 4 indexing threads */
 								});
 
-		AnyParams QueryTimeParams( { "efSearch=10", "efSearch=20", "efSearch=40", "efSearch=80", "efSearch=160", "efSearch=240" });
+		AnyParams QueryTimeParams( { "efSearch=10" });
 
-		Index<float>* HnswIndex = 
+		Index<float>* HnswIndex =
                         MethodFactoryRegistry<float>::Instance().
                                 CreateMethod(false /* don't print progress */,
                                         "hnsw",
-                                        "custom",
-                                        customSpace,
+                                        "l2",
+                                        *customSpace,
                                         dataSet);
+
 		HnswIndex->CreateIndex(IndexParams);
+
 		HnswIndex->SetQueryTimeParams(QueryTimeParams);
+
 		HnswIndex->SaveIndex("HnswIndex");
-		
+
 		knn_vec = new std::vector<int>[n_vertices];
 		
 		pthread_t *pt = new pthread_t[n_threads];

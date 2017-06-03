@@ -43,9 +43,9 @@
 #include "knnquery.h"
 #include "knnqueue.h"
 #include "methodfactory.h"
-
+#include "spacefactory.h"
 #include "ztimer.h"
-
+#include <space/space_vector.h>
 
 
 #include "space/space_vector_gen.h"
@@ -81,6 +81,7 @@ private:
 	double real_time[50] = {0};
 	double cpu_time[50] = {0};
 	similarity::ObjectVector    dataSet; 
+	similarity::Space<float>* customSpace;
 	//0: normalize + rptrees(annoy), 1: knn->P for 0
 	//0 + 1: init time
 	//2: propagation 1, 3: knn->P for 2
