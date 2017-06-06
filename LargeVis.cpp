@@ -282,16 +282,19 @@ void LargeVis::annoy_thread(int id)
 	}
 	else
 	{
-		unsigned K = 5; // 5-NN query
-						
+		unsigned K = 50; // 5-NN query
+		
 		Index<float>* cur_index =
                         MethodFactoryRegistry<float>::Instance().
-                                CreateMethod(false /* don't print progress */,
+                                CreateMethod(true /* don't print progress */,
                                         "hnsw",
                                         "l2",
                                         *customSpace,
                                         dataSet);
+		printf("%p\n",cur_index);
+
 		cur_index->LoadIndex("HnswIndex");
+
 		for (long long i = lo; i < hi; ++i)
 		{
 					AnyParams tempParams;
@@ -299,18 +302,26 @@ void LargeVis::annoy_thread(int id)
 				CreateSpace("l2", tempParams);
 			KNNQuery<float>   knnQ(*space, dataSet[i], K);
 			cur_index->Search(&knnQ);
+			//knnQ.Print();
 			KNNQueue<float>* res = (&knnQ)->Result()->Clone();
 
-			while (!res->Empty() && i == 10) {
-				cout << res->TopObject()->id() << " : " << res->TopDistance() << endl;
+			while (!res->Empty()) {
+				knn_vec[i].push_back(res->TopObject()->id());
+				//cout << res->TopObject()->id() << " : " << res->TopDistance() << endl;
 				res->Pop();
 			}
+			for (long long j = 0; j < knn_vec[i].size(); ++j)
+				if (knn_vec[i][j] == i)
+				{
+					knn_vec[i].erase(knn_vec[i].begin() + j);
+					break;
+				}
 		}
 
 
 		vector<string>                  vExternIds;
 		vExternIds.resize(dataSet.size()); 
-		customSpace->WriteDataset(dataSet, vExternIds, "testdataset.txt");
+		//customSpace->WriteDataset(dataSet, vExternIds, "testdataset.txt");
 		delete cur_index;cur_index=NULL;
 	}
 
@@ -368,24 +379,25 @@ void LargeVis::run_annoy()
 
 		AnyParams IndexParams(
 								{
-								"M=10",
+									"delaunay_type=0",
 								"indexThreadQty=4" /* 4 indexing threads */
 								});
 
-		AnyParams QueryTimeParams( { "efSearch=10" });
+
 
 		Index<float>* HnswIndex =
                         MethodFactoryRegistry<float>::Instance().
-                                CreateMethod(false /* don't print progress */,
+                                CreateMethod(true /* don't print progress */,
                                         "hnsw",
                                         "l2",
                                         *customSpace,
                                         dataSet);
+printf("%p\n",HnswIndex);
 
 		HnswIndex->CreateIndex(IndexParams);
 
+		AnyParams QueryTimeParams( { "efSearch=100" });
 		HnswIndex->SetQueryTimeParams(QueryTimeParams);
-
 		HnswIndex->SaveIndex("HnswIndex");
 
 		knn_vec = new std::vector<int>[n_vertices];

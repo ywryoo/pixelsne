@@ -46,7 +46,7 @@
 #include "spacefactory.h"
 #include "ztimer.h"
 #include <space/space_vector.h>
-
+#include "method/hnsw.h"
 
 #include "space/space_vector_gen.h"
 
