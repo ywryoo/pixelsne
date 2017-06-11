@@ -12,6 +12,7 @@
 #include "vptree.h"
 #include "pixelsne.h"
 #include "sptreeBH.h"
+#include <algorithm>
 
 #include "ptree.h"
 #include "LargeVis.h"
@@ -99,7 +100,7 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne,bool isValidation, bool pipelined, int max_iter, int stop_lying_iter, 
+               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne,bool isValidation, bool pipelined, double learning, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) {
     knn_validation = isValidation; 
     max_iteration = max_iter;
@@ -134,7 +135,7 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     
 	momentum = .5;
     final_momentum = .8;
-	eta = 200.0;
+	eta = learning;
     errors = (double *)malloc(sizeof(double)*max_iteration/50);
 	buff = (double*)malloc(nnnum_threads * vvvector_dim * sizeof(double));
 	gggglobal_sumq = (double*)malloc(nnnum_threads * sizeof(double));
@@ -264,43 +265,47 @@ void *BHupdateGradientThread(void *_id)
 
 	long long hi = (id + 1) * *gggglobal_N / nnnum_threads;
 	//printf("%lld %lld %lld\n", id, lo, hi);
-    int f_temp;
+    
     if(globalIsSleeping && (gggglobal_iter >= gggglobal_stop_lying_iter + 150))
     {
-        for (long long i = lo * *gggglobal_no_dims; i < hi * *gggglobal_no_dims; ++i)
+        for (long long i = lo * (*gggglobal_no_dims); i < hi * (*gggglobal_no_dims); ++i)
         {
+            int iddim;
+            /*only works in 2D!!! if change to 3d, needs change*/
             double f_temp;
-            if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){
+            //쓰레시홀드도 제곱단위 uY도 제곱단위
+            //일단 밀도.
+            iddim=i/(*gggglobal_no_dims);///(*gggglobal_no_dims);
+            if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){
                 gggglobal_gains[i] = (sign(gggglobal_dY[i]) != sign(gggglobal_uY[i])) ? (gggglobal_gains[i] + .2) : (gggglobal_gains[i] * .8);
                 if (gggglobal_gains[i] < .01) gggglobal_gains[i] = .01;
                 gggglobal_uY[i] = *gggglobal_momentum * gggglobal_uY[i] - *gggglobal_eta * gggglobal_gains[i] * gggglobal_dY[i];
             }
 
-            if((i%(*gggglobal_no_dims))==(*gggglobal_no_dims)-1){
-                if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){//have to be checked
+            if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim])
+                gggglobal_Y[i] = gggglobal_Y[i] + gggglobal_uY[i];
+            if(i%(*gggglobal_no_dims)==*gggglobal_no_dims-1){
+                if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){//have to be checked
                     f_temp=0;
                     for(int d=0;d<(*gggglobal_no_dims);d++){
-//                        f_temp+=gggglobal_uY[i*(*gggglobal_no_dims)+d]*gggglobal_uY[i*(*gggglobal_no_dims)+d];
-                        f_temp+=gggglobal_uY[i*(*gggglobal_no_dims)+d]*gggglobal_uY[i*(*gggglobal_no_dims)+d];
+                        f_temp+=gggglobal_uY[iddim*(*gggglobal_no_dims)+d]*gggglobal_uY[iddim*(*gggglobal_no_dims)+d];
                     }
                     if(f_temp<=gggglobal_threshold) {
-                        if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i]){//to see gggglobal_skip[i] is 2^n
-                            gggglobal_skip[i]*=4;
-                            gggglobal_skip[i]--;
-                            if(gggglobal_skip[i]>16)gggglobal_skip[i]=15;
+                        if(((gggglobal_skip[iddim])&(-gggglobal_skip[iddim]))==gggglobal_skip[iddim]){//to see gggglobal_skip[i] is 2^n
+                            gggglobal_skip[iddim]*=4;
+    //                            gggglobal_skip[iddim]--;
+                            if(gggglobal_skip[iddim]>16)gggglobal_skip[iddim]=16;
                         }
                     }
                     else {
-                        gggglobal_skip[i]=1;
+                        gggglobal_skip[iddim]=1;
                     }
                 }
             }
-
-            if(((gggglobal_skip[i])&(-gggglobal_skip[i]))==gggglobal_skip[i])
-                gggglobal_Y[i] = gggglobal_Y[i] + gggglobal_uY[i];
             
 
         }
+    
     }
     else
     {
@@ -400,7 +405,6 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
         gggglobal_Y = Y;
         globalIsSleeping = sleepingg;
         // Compute (approximate) gradient
-        double srate=500;
         computeGradientBH(row_P, col_P, val_P, Y, N, no_dims, dY, theta);
         if(globalIsSleeping && (iter >= gggglobal_stop_lying_iter + 150))
         {
@@ -411,16 +415,22 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
             sort(temp_x,temp_x+N);
             sort(temp_y,temp_y+N);
  //           double min_len=5;
-            double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])*(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4]);
-            threshold/=srate;
-            threshold/=(double)N;
-            threshold/=(double)N;
-            printf("fixed : x = %lf ~ %lf / y = %lf ~ %lf\n",temp_x[3*N/4],temp_x[N/4],temp_y[3*N/4],temp_y[N/4]);
-            gggglobal_threshold = threshold;
-            printf("srate %.1lf / threshold : %.10lf\n",srate,threshold);
-//            if((temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])<min_len*min_len){
- //               gggglobal_threshold=0;
-  //          }
+            double srate=20;
+            double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])/srate/N;
+//            double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])*(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])/srate/N/N;
+
+
+            // printf("50%% area : x - %lf ~ %lf / y = %lf ~ %lf\n",temp_x[3*N/4],temp_x[N/4],temp_y[3*N/4],temp_y[N/4]);
+            // printf("10%% area : x - %lf ~ %lf / y = %lf ~ %lf\n",(temp_x[11*N/20]),(temp_x[9*N/20]),(temp_y[11*N/20]),(temp_y[9*N/20]));
+             gggglobal_threshold = threshold;
+            // printf("%lf vs %lf\n",(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4]),(temp_x[11*N/20]-temp_x[9*N/20])*(temp_y[11*N/20]-temp_y[9*N/20])*100);
+            // if((temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])>(temp_x[11*N/20]-temp_x[9*N/20])*(temp_y[11*N/20]-temp_y[9*N/20])*100){
+            //     threshold=0.0;
+            //     gggglobal_threshold=0.0;
+            // }
+
+
+            printf("srate %.1lf / threshold : %.14lf\n",srate,gggglobal_threshold);
         }
 //		printf("===\n");
 		boost::thread *pt = new boost::thread[nnnum_threads];
@@ -711,7 +721,7 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
         int cntt=0;
         for(int n = 0; n < N; n++) {
             if(skip[n]>1 ) skip[n]--;
-            if(((skip[n])&(-skip[n]))==skip[n]||skip[n]==0){
+            if(((skip[n])&(-skip[n]))==skip[n]){
                 tree->computeNonEdgeForces(n, theta, neg_f + n * D, &sum_Q, beta, iter_cnt);
             }
             else{
@@ -721,7 +731,7 @@ void PixelSNE::computeGradient(unsigned long long* inp_row_P, unsigned long long
         if(cntt != 0) printf("PixelSNE: SGD Skipped : %d\n",cntt);
         // Compute final t-SNE gradient
         for(int i = 0; i < N * D; i++) {
-            if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+            if(((skip[i/D])&(-skip[i/D]))==skip[i/D])
                 dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
             else dC[i]=0;
         }
@@ -820,7 +830,7 @@ void PixelSNE::computeGradientBH(unsigned long long* inp_row_P, unsigned long lo
 
         // Compute final t-SNE gradient
         for(int i = 0; i < N * D; i++) {
-            if(((skip[i/D])&(-skip[i/D]))==skip[i/D]||skip[i/D]==0)
+            if(((skip[i/D])&(-skip[i/D]))==skip[i/D])
                 dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
             else dC[i]=0;
         }

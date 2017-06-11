@@ -20,7 +20,7 @@
 #include <map>
 #include <float.h>
 #define BILLION 1000000000L
-#define METHOD 1
+#define METHOD 0
 using namespace similarity;
 /*
  * Define an implementation of the distance function.
@@ -291,7 +291,7 @@ void LargeVis::annoy_thread(int id)
                                         "l2",
                                         *customSpace,
                                         dataSet);
-		printf("%p\n",cur_index);
+		//printf("%p\n",cur_index);
 
 		cur_index->LoadIndex("HnswIndex");
 
@@ -302,7 +302,7 @@ void LargeVis::annoy_thread(int id)
 				CreateSpace("l2", tempParams);
 			KNNQuery<float>   knnQ(*space, dataSet[i], K);
 			cur_index->Search(&knnQ);
-			//knnQ.Print();
+			knnQ.Print();
 			KNNQueue<float>* res = (&knnQ)->Result()->Clone();
 
 			while (!res->Empty()) {
@@ -379,7 +379,8 @@ void LargeVis::run_annoy()
 
 		AnyParams IndexParams(
 								{
-									"delaunay_type=0",
+									"M=10000",
+									"efConstruction=10000",
 								"indexThreadQty=4" /* 4 indexing threads */
 								});
 
@@ -392,7 +393,7 @@ void LargeVis::run_annoy()
                                         "l2",
                                         *customSpace,
                                         dataSet);
-printf("%p\n",HnswIndex);
+//printf("%p\n",HnswIndex);
 
 		HnswIndex->CreateIndex(IndexParams);
 
