@@ -20,7 +20,7 @@
 #include <map>
 #include <float.h>
 #define BILLION 1000000000L
-#define METHOD 0
+#define METHOD 1
 using namespace similarity;
 /*
  * Define an implementation of the distance function.
@@ -282,7 +282,7 @@ void LargeVis::annoy_thread(int id)
 	}
 	else
 	{
-		unsigned K = 50; // 5-NN query
+		unsigned K = 150; // 5-NN query
 		
 		Index<float>* cur_index =
                         MethodFactoryRegistry<float>::Instance().
@@ -293,8 +293,9 @@ void LargeVis::annoy_thread(int id)
                                         dataSet);
 		//printf("%p\n",cur_index);
 
-		cur_index->LoadIndex("HnswIndex");
-
+		cur_index->LoadIndex("swIndex");
+		AnyParams QueryTimeParams( { "efSearch=100" });
+		cur_index->SetQueryTimeParams(QueryTimeParams);
 		for (long long i = lo; i < hi; ++i)
 		{
 					AnyParams tempParams;
@@ -302,7 +303,7 @@ void LargeVis::annoy_thread(int id)
 				CreateSpace("l2", tempParams);
 			KNNQuery<float>   knnQ(*space, dataSet[i], K);
 			cur_index->Search(&knnQ);
-			knnQ.Print();
+			//knnQ.Print();
 			KNNQueue<float>* res = (&knnQ)->Result()->Clone();
 
 			while (!res->Empty()) {
@@ -376,19 +377,18 @@ void LargeVis::run_annoy()
 			dataSet.push_back(new Object(i, -1, temp.size() * sizeof(float), &temp[0]));
 
 		}
-
-		AnyParams IndexParams(
+				AnyParams IndexParams(
 								{
-									"M=10000",
-									"efConstruction=10000",
-								"indexThreadQty=4" /* 4 indexing threads */
+									"M=20",
+									"efConstruction=10",
+								"indexThreadQty=4" // 4 indexing threads 
 								});
 
 
 
 		Index<float>* HnswIndex =
                         MethodFactoryRegistry<float>::Instance().
-                                CreateMethod(true /* don't print progress */,
+                                CreateMethod(true, // don't print progress
                                         "hnsw",
                                         "l2",
                                         *customSpace,
@@ -399,8 +399,34 @@ void LargeVis::run_annoy()
 
 		AnyParams QueryTimeParams( { "efSearch=100" });
 		HnswIndex->SetQueryTimeParams(QueryTimeParams);
-		HnswIndex->SaveIndex("HnswIndex");
+		HnswIndex->SaveIndex("swIndex");
+/*
+		AnyParams IndexParams(
+								{
+									"NN=20",
+									"initIndexAttempts=1",
+									"efConstruction=10",
 
+								"indexThreadQty=4" // 4 indexing threads 
+								});
+
+
+
+		Index<float>* HnswIndex =
+                        MethodFactoryRegistry<float>::Instance().
+                                CreateMethod(true, // don't print progress
+                                        "small_world_rand",
+                                        "l2",
+                                        *customSpace,
+                                        dataSet);
+//printf("%p\n",HnswIndex);
+
+		HnswIndex->CreateIndex(IndexParams);
+
+		AnyParams QueryTimeParams( { "initSearchAttempts=1" });
+		HnswIndex->SetQueryTimeParams(QueryTimeParams);
+		HnswIndex->SaveIndex("swIndex");
+*/
 		knn_vec = new std::vector<int>[n_vertices];
 		
 		pthread_t *pt = new pthread_t[n_threads];
