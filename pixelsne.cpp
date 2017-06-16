@@ -100,7 +100,7 @@ PixelSNE::~PixelSNE() {
 }
 
 void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne,bool isValidation, bool pipelined, double learning, int max_iter, int stop_lying_iter, 
+               unsigned int bins, int p_method, int rand_seed, int nthreads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne,bool isValidation, bool pipelined,  double sratee, double learning, int max_iter, int stop_lying_iter, 
                int mom_switch_iter) {
     knn_validation = isValidation; 
     max_iteration = max_iter;
@@ -116,6 +116,8 @@ void PixelSNE::run(double* X, int N, int D, double* Y, int no_dims, double perpl
     isPipelined = pipelined;
     bhsneOnly = bhsne;
     vvvector_dim = 2;
+    srate=sratee;
+    
     if(propagation_num == 0) propDone = true;
     // Set random seed
     if (skip_random_init != true) {
@@ -415,7 +417,7 @@ int PixelSNE::updatePoints(double* Y, int &N, int no_dims, double &theta, unsign
             sort(temp_x,temp_x+N);
             sort(temp_y,temp_y+N);
  //           double min_len=5;
-            double srate=20;
+            
             double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])/srate/N;
 //            double threshold=(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])*(temp_x[3*N/4]-temp_x[N/4])*(temp_y[3*N/4]-temp_y[N/4])/srate/N/N;
 

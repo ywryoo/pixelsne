@@ -56,6 +56,7 @@ private:
     double **outYs;
     double *errors;
     bool bhsneOnly;
+    double srate;
 public:
     double fitting_cpu_time;
     double fitting_real_time;
@@ -66,7 +67,7 @@ public:
     PixelSNE();
     ~PixelSNE();
     void run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta,
-        unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne, bool isValidation, bool pipelined , double learning=200.0, int max_iter=1000, int stop_lying_iter=250, 
+        unsigned int bins, int p_method, int rand_seed, int n_threads, int propagation_num, bool skip_random_init, int n_trees, bool bhsne, bool isValidation, bool pipelined , double sratee, double learning=200.0, int max_iter=1000, int stop_lying_iter=250, 
         int mom_switch_iter=250);
     void load_data(const char* inputfile, double **data, int* n, int* d);
     bool load_data(const char* inputfile, double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, unsigned int* bins, int* p_method, int* rand_seed);
