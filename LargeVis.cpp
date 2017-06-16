@@ -377,11 +377,15 @@ void LargeVis::run_annoy()
 			dataSet.push_back(new Object(i, -1, temp.size() * sizeof(float), &temp[0]));
 
 		}
+
+		char tempop[30] = "indexThreadQty=";
+		sprintf(tempop,"%s%lld",tempop,n_threads);
+
 				AnyParams IndexParams(
 								{
 									"M=20",
 									"efConstruction=10",
-								"indexThreadQty=4" // 4 indexing threads 
+								tempop // 4 indexing threads 
 								});
 
 
